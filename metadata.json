@@ -1,0 +1,7 @@
+{
+  "name": "FinTrack - Controla Tus Cuartos",
+  "description": "Una aplicación para controlar tus finanzas personales al estilo dominicano. Registra tus cuentas, sube fotos de tus facturas, y lleva un control de tus entradas y salidas de dinero. Maneja tus cuentas en Pesos (DOP) y Dólares (USD) fácilmente.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
