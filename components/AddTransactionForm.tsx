@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { Transaction, TransactionType, Currency, Account } from '../types';
+import type { Transaction, Currency, Account } from '../types';
 import Card from './ui/Card';
 import Input from './ui/Input';
 import Button from './ui/Button';
@@ -7,125 +7,118 @@ import Select from './ui/Select';
 import FileInput from './ui/FileInput';
 import { PlusCircle } from 'lucide-react';
 import { CATEGORIES } from '../constants';
-import { resizeImage } from '../utils/image';
 
 interface AddTransactionFormProps {
-  onAddTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  // FIX: Omit user_id as it is handled by the parent component.
+  onAddTransaction: (transaction: Omit<Transaction, 'id' | 'user_id' | 'transferToAccountId'>, receiptFile?: File) => void;
+  onUpdateTransaction: (transaction: Partial<Transaction> & { id: string }, receiptFile?: File) => void;
+  transactionToEdit: Transaction | null;
   accounts: Account[];
   defaultCurrency?: Currency;
-  prefillData?: { description: string; date: string; type: TransactionType } | null;
 }
 
-const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onAddTransaction, accounts, defaultCurrency = 'DOP', prefillData }) => {
+const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onAddTransaction, onUpdateTransaction, transactionToEdit, accounts, defaultCurrency = 'DOP' }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [type, setType] = useState<TransactionType>('expense');
+  const [type, setType] = useState<'income' | 'expense'>('expense');
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState(new Date().toTimeString().slice(0, 5));
+  const [time, setTime] = useState('');
   const [currency, setCurrency] = useState<Currency>(defaultCurrency);
   const [accountId, setAccountId] = useState('');
-  const [receiptImage, setReceiptImage] = useState<string | undefined>();
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
-  const filteredCategories = useMemo(() => {
-    return CATEGORIES.filter(c => c.type === type);
-  }, [type]);
+  const isEditMode = !!transactionToEdit;
 
-  useEffect(() => {
-    // Set default source
-    if (accounts.length > 0 && !accountId) {
-      setAccountId(accounts[0].id);
-    }
-  }, [accounts, accountId]);
-
-  useEffect(() => {
-    if (prefillData) {
-        setDescription(prefillData.description);
-        setDate(prefillData.date);
-        setType(prefillData.type);
-    } else {
-        setDescription('');
-        setDate(new Date().toISOString().split('T')[0]);
-        setType('expense');
-    }
-  }, [prefillData]);
-
-  useEffect(() => {
-    if (filteredCategories.length > 0 && !filteredCategories.find(c => c.name === category)) {
-        setCategory('');
-    }
-  }, [type, filteredCategories, category]);
+  const filteredCategories = useMemo(() => CATEGORIES.filter(c => c.type === type), [type]);
   
-  const handleFileChange = async (file: File | null) => {
-    if (file) {
-      try {
-        const resizedImage = await resizeImage(file, 800);
-        setReceiptImage(resizedImage);
-      } catch (error) {
-        console.error("Error resizing image:", error);
-        alert("Hubo un error al procesar la imagen.");
-      }
+  useEffect(() => {
+    if (transactionToEdit) {
+        setDescription(transactionToEdit.description);
+        setAmount(String(transactionToEdit.amount));
+        setType(transactionToEdit.type as 'income' | 'expense');
+        setCategory(transactionToEdit.category);
+        setDate(transactionToEdit.date);
+        setTime(transactionToEdit.time || '');
+        setCurrency(transactionToEdit.currency);
+        setAccountId(transactionToEdit.accountId);
     } else {
-        setReceiptImage(undefined);
+        // Reset form
+        setDescription('');
+        setAmount('');
+        setType('expense');
+        setCategory('');
+        setDate(new Date().toISOString().split('T')[0]);
+        setTime('');
+        setCurrency(defaultCurrency);
+        setAccountId(accounts.length > 0 ? accounts[0].id : '');
+        setReceiptFile(null);
     }
-  };
+  }, [transactionToEdit, accounts, defaultCurrency]);
 
+  useEffect(() => {
+      // Auto-select first category when type changes or on initial load
+      if (!category && filteredCategories.length > 0) {
+          setCategory(filteredCategories[0].name);
+      }
+      // If the selected category is not in the new list, reset it
+      if (category && !filteredCategories.some(c => c.name === category)) {
+          setCategory(filteredCategories.length > 0 ? filteredCategories[0].name : '');
+      }
+  }, [type, filteredCategories, category]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!description || !amount || !category || !date || !accountId) {
-        alert("Por favor, completa todos los campos.");
-        return;
+      alert("Por favor, completa todos los campos.");
+      return;
     }
-
     const amountValue = parseFloat(amount);
     if (isNaN(amountValue) || amountValue <= 0) {
-        alert("Por favor, pon un monto válido.");
-        return;
+      alert("Por favor, pon un monto válido.");
+      return;
     }
 
-    onAddTransaction({
+    const transactionData = {
       description,
       amount: amountValue,
       type,
       category,
       date,
-      time,
+      time: time || undefined,
       currency,
-      accountId: accountId,
-      receiptImage,
-    });
+      accountId,
+      receiptImage: transactionToEdit?.receiptImage // Preserve existing image if not changed
+    };
+
+    if (isEditMode) {
+        onUpdateTransaction({ id: transactionToEdit.id, ...transactionData }, receiptFile || undefined);
+    } else {
+        onAddTransaction(transactionData, receiptFile || undefined);
+    }
   };
-  
+
   if (accounts.length === 0) {
     return (
         <Card>
             <div className="text-center p-4">
-                <h3 className="text-lg font-semibold text-white">¡Primero una cuenta!</h3>
-                <p className="text-neutral-200 mt-2">Necesitas agregar una cuenta o tarjeta antes de registrar un movimiento.</p>
-                <p className="text-sm text-neutral-600">Ve a la sección de 'Cuentas' para empezar.</p>
+                <h3 className="text-lg font-semibold text-white">¡Necesitas una cuenta!</h3>
+                <p className="text-neutral-200 mt-2">Debes tener al menos una cuenta para registrar un movimiento.</p>
             </div>
         </Card>
     );
   }
-  
-  const { cards, bankAccounts } = useMemo(() => {
-    const cards = accounts.filter(acc => acc.type === 'Tarjeta de Crédito');
-    const bankAccounts = accounts.filter(acc => acc.type !== 'Tarjeta de Crédito');
-    return { cards, bankAccounts };
-  }, [accounts]);
 
   return (
     <Card>
       <div className="flex items-center mb-6">
         <PlusCircle className="w-6 h-6 mr-2 text-brand-primary" />
-        <h3 className="text-xl font-semibold">Registrar Movimiento</h3>
+        <h3 className="text-xl font-semibold">{isEditMode ? 'Editar Movimiento' : 'Nuevo Movimiento'}</h3>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="description" className="block text-sm font-medium text-neutral-200 mb-1">Detalle</label>
-          <Input id="description" type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ej: Coro en la zona" required />
+            <label htmlFor="description" className="block text-sm font-medium text-neutral-200 mb-1">Detalle</label>
+            <Input id="description" type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ej: Compra en el supermercado" required />
         </div>
         <div className="grid grid-cols-2 gap-4">
             <div>
@@ -133,8 +126,8 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onAddTransactio
                 <Input id="amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" required min="0.01" step="0.01" />
             </div>
             <div>
-                 <label htmlFor="currency" className="block text-sm font-medium text-neutral-200 mb-1">Moneda</label>
-                 <Select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
+                <label htmlFor="currency" className="block text-sm font-medium text-neutral-200 mb-1">Moneda</label>
+                <Select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}>
                     <option value="DOP">RD$</option>
                     <option value="USD">US$</option>
                 </Select>
@@ -142,33 +135,22 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onAddTransactio
         </div>
         <div>
             <label htmlFor="type" className="block text-sm font-medium text-neutral-200 mb-1">Tipo</label>
-            <Select id="type" value={type} onChange={(e) => setType(e.target.value as TransactionType)}>
+            <Select id="type" value={type} onChange={(e) => setType(e.target.value as 'income' | 'expense')}>
                 <option value="expense">Salida</option>
                 <option value="income">Entrada</option>
             </Select>
         </div>
         <div>
-            <label htmlFor="source" className="block text-sm font-medium text-neutral-200 mb-1">Cuenta / Tarjeta</label>
-            <Select id="source" value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
-                {cards.length > 0 && <optgroup label="Tarjetas de Crédito">
-                    {cards.map(card => (
-                        <option key={card.id} value={card.id}>{card.name}</option>
-                    ))}
-                </optgroup>}
-                {bankAccounts.length > 0 && <optgroup label="Cuentas Bancarias">
-                    {bankAccounts.map(acc => (
-                        <option key={acc.id} value={acc.id}>{acc.name} ({acc.bank})</option>
-                    ))}
-                </optgroup>}
+            <label htmlFor="accountId" className="block text-sm font-medium text-neutral-200 mb-1">Cuenta / Tarjeta</label>
+            <Select id="accountId" value={accountId} onChange={(e) => setAccountId(e.target.value)} required>
+                {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({acc.bank})</option>)}
             </Select>
         </div>
         <div>
             <label htmlFor="category" className="block text-sm font-medium text-neutral-200 mb-1">Categoría</label>
             <Select id="category" value={category} onChange={(e) => setCategory(e.target.value)} required>
                 <option value="" disabled>Seleccione una categoría</option>
-                {filteredCategories.map(cat => (
-                    <option key={cat.name} value={cat.name}>{cat.name}</option>
-                ))}
+                {filteredCategories.map(cat => <option key={cat.name} value={cat.name}>{cat.name}</option>)}
             </Select>
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -177,18 +159,19 @@ const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onAddTransactio
                 <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
             </div>
             <div>
-                <label htmlFor="time" className="block text-sm font-medium text-neutral-200 mb-1">Hora</label>
-                <Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
+                <label htmlFor="time" className="block text-sm font-medium text-neutral-200 mb-1">Hora (Opcional)</label>
+                <Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
             </div>
         </div>
-        {type === 'expense' && (
-            <div>
-                <label htmlFor="receipt" className="block text-sm font-medium text-neutral-200 mb-1">Foto de la Factura (Opcional)</label>
-                <FileInput id="receipt" onChange={handleFileChange} />
-            </div>
-        )}
+        <div>
+            <label className="block text-sm font-medium text-neutral-200 mb-1">Adjuntar Factura (Opcional)</label>
+            <FileInput id="receipt" onChange={setReceiptFile} />
+             {isEditMode && transactionToEdit?.receiptImage && (
+                <p className="text-xs text-neutral-400 mt-2">Sube una nueva imagen para reemplazar la existente.</p>
+            )}
+        </div>
         <Button type="submit" className="w-full !mt-6">
-          Agregar Movimiento
+          {isEditMode ? 'Guardar Cambios' : 'Registrar Movimiento'}
         </Button>
       </form>
     </Card>

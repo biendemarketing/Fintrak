@@ -1,310 +1,159 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
-import type { Transaction, Account, RecurringTransaction, View, User, Task } from './types';
-import { useLocalStorage } from './hooks/useLocalStorage';
-import { exampleAccounts, exampleTransactions, exampleRecurringTransactions, exampleUser, exampleTasks } from './data/exampleData';
+// FIX: This file was missing. Added full implementation for the main App component.
+import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from './lib/supabase';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
+import type { Transaction, Account, View, UserSettings, RecurringTransaction, Task } from './types';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
-import MovementsView from './components/CalendarView';
-import AccountsList from './components/AccountsList';
-import RecurringTransactionList from './components/RecurringTransactionList';
-import AddTransactionForm from './components/AddTransactionForm';
-import AddTransferForm from './components/AddTransferForm';
-import AddRecurringTransactionForm from './components/AddRecurringTransactionForm';
-import AddAccountForm from './components/AddAccountForm';
-import TransactionDetailModal from './components/TransactionDetailModal';
-import AddMenuModal from './components/AddMenuModal';
-import SettingsPanel from './components/SettingsPanel';
 import BottomNavBar from './components/BottomNavBar';
+import AddTransactionForm from './components/AddTransactionForm';
+import AddAccountForm from './components/AddAccountForm';
+import AccountsList from './components/AccountsList';
+import TransactionDetailModal from './components/TransactionDetailModal';
+import SettingsPanel from './components/SettingsPanel';
 import PinLockScreen from './components/PinLockScreen';
-import PinSetupModal from './components/PinSetupModal';
+import AddMenuModal from './components/AddMenuModal';
+import AddTransferForm from './components/AddTransferForm';
+import RecurringTransactionList from './components/RecurringTransactionList';
+import AddRecurringTransactionForm from './components/AddRecurringTransactionForm';
+import CalendarView from './components/CalendarView';
 import SearchModal from './components/SearchModal';
 import NotificationsList from './components/NotificationsList';
+import GetStarted from './components/GetStarted';
+import Auth from './components/Auth';
 import TasksList from './components/TasksList';
 import AddTaskForm from './components/AddTaskForm';
 import FijosMenuModal from './components/FijosMenuModal';
 import CompleteTaskModal from './components/CompleteTaskModal';
-import { X } from 'lucide-react';
-import { COLOR_THEMES } from './constants';
+
+// A helper function for handling Supabase responses.
+// FIX: Changed `Promise` to `PromiseLike` to accommodate Supabase's thenable query builders.
+const handleSupabaseResponse = async (query: PromiseLike<{ data?: any, error: any; [key: string]: any; }>) => {
+  const { data, error } = await query;
+  if (error) {
+    console.error('Supabase error:', error.message);
+    alert(`Error: ${error.message}`);
+    return null;
+  }
+  return data;
+}
 
 const App: React.FC = () => {
-  const [transactions, setTransactions] = useLocalStorage<Transaction[]>('transactions', []);
-  const [accounts, setAccounts] = useLocalStorage<Account[]>('accounts', []);
-  const [recurringTransactions, setRecurringTransactions] = useLocalStorage<RecurringTransaction[]>('recurringTransactions', []);
-  const [tasks, setTasks] = useLocalStorage<Task[]>('tasks', []);
-  const [user, setUser] = useLocalStorage<User>('user', exampleUser);
-  const [view, setView] = useState<View>('dashboard');
+  // Authentication State
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // App Data State
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   
-  const [isAddTransactionFormOpen, setAddTransactionFormOpen] = useState(false);
-  const [isAddTransferFormOpen, setAddTransferFormOpen] = useState(false);
-  const [isAddRecurringFormOpen, setAddRecurringFormOpen] = useState(false);
-  const [isAddAccountFormOpen, setAddAccountFormOpen] = useState(false);
-  const [isAddTaskFormOpen, setAddTaskFormOpen] = useState(false);
+  // UI State
+  const [view, setView] = useState<View>('dashboard');
+  const [modal, setModal] = useState<'transaction' | 'account' | 'transfer' | 'recurring' | 'task' | null>(null);
+  const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [isSearchOpen, setSearchOpen] = useState(false);
   const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const [isFijosMenuOpen, setFijosMenuOpen] = useState(false);
-  const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [editingRecurringTransaction, setEditingRecurringTransaction] = useState<RecurringTransaction | null>(null);
-
-  const [isLocked, setIsLocked] = useState(user.pinEnabled);
-  const [isPinSetupOpen, setPinSetupOpen] = useState(false);
-  const [isSearchModalOpen, setSearchModalOpen] = useState(false);
-  
+  const [itemToEdit, setItemToEdit] = useState<Transaction | Account | RecurringTransaction | Task | null>(null);
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [prefillData, setPrefillData] = useState<any>(null);
   const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
-  const [prefillDataForTransaction, setPrefillDataForTransaction] = useState<{description: string, date: string, type: 'expense' | 'income' } | null>(null);
-
-
-  const [prefillTransfer, setPrefillTransfer] = useState<{toAccountId: string} | null>(null);
+  
+  // Pre-Authentication UI State
+  const [preAuthStep, setPreAuthStep] = useState<'loading' | 'getStarted' | 'auth'>('loading');
+  const [authInitialView, setAuthInitialView] = useState<'signIn' | 'signUp'>('signIn');
+  
+  // User Settings
+  const [settings, setSettings] = useState<UserSettings>({
+    theme: 'default',
+    defaultCurrency: 'DOP',
+    pinEnabled: false,
+    pin: null,
+  });
 
   useEffect(() => {
-    // Cargar datos de ejemplo si es la primera vez que se usa la app
-    const isFirstRun = localStorage.getItem('isFirstRun') === null;
-    if (isFirstRun) {
-      setAccounts(exampleAccounts);
-      setTransactions(exampleTransactions);
-      setRecurringTransactions(exampleRecurringTransactions);
-      setTasks(exampleTasks);
-      setUser(exampleUser);
-      localStorage.setItem('isFirstRun', 'false');
+    const hasSeenGetStarted = localStorage.getItem('hasSeenGetStarted');
+    if (hasSeenGetStarted) {
+      setPreAuthStep('auth');
+    } else {
+      setPreAuthStep('getStarted');
     }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+      }
+    );
+    return () => subscription.unsubscribe();
   }, []);
+  
+  // Fetch all user data
+  const fetchData = async (currentUser: User) => {
+    const [accountsData, transactionsData, recurringData, tasksData, settingsData] = await Promise.all([
+      handleSupabaseResponse(supabase.from('accounts').select('*').eq('user_id', currentUser.id)),
+      handleSupabaseResponse(supabase.from('transactions').select('*').eq('user_id', currentUser.id).order('date', { ascending: false }).order('time', { ascending: false, nullsFirst: true })),
+      handleSupabaseResponse(supabase.from('recurring_transactions').select('*').eq('user_id', currentUser.id)),
+      handleSupabaseResponse(supabase.from('tasks').select('*').eq('user_id', currentUser.id)),
+      handleSupabaseResponse(supabase.from('settings').select('*').eq('user_id', currentUser.id).single()),
+    ]);
+    
+    if (accountsData) setAccounts(accountsData);
+    if (transactionsData) setTransactions(transactionsData);
+    if (recurringData) setRecurringTransactions(recurringData);
+    if (tasksData) setTasks(tasksData);
+    if (settingsData) setSettings(settingsData);
+  };
 
   useEffect(() => {
-    // Aplicar tema claro/oscuro y de color
-    const root = window.document.documentElement;
-    if (user.theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
+    if (session?.user) {
+      fetchData(session.user);
     }
-
-    const selectedTheme = COLOR_THEMES.find(t => t.name === user.themeStyle) || COLOR_THEMES[0];
-    root.style.setProperty('--color-brand-primary', selectedTheme.primary);
-    root.style.setProperty('--color-brand-secondary', selectedTheme.secondary);
-
-  }, [user.theme, user.themeStyle]);
+  }, [session]);
   
-  const handleUpdateUser = (updatedUser: Partial<User>) => {
-    setUser(prev => ({ ...prev, ...updatedUser }));
-  };
+  useEffect(() => {
+    document.documentElement.style.setProperty('--color-brand-primary', COLOR_THEMES.find(t => t.name === settings.theme)?.primary || '79 70 229');
+    document.documentElement.style.setProperty('--color-brand-secondary', COLOR_THEMES.find(t => t.name === settings.theme)?.secondary || '236 72 153');
+  }, [settings.theme]);
 
-  const handleLogout = () => {
-    if (window.confirm('¿Estás seguro de que quieres cerrar sesión? Se borrarán todos tus datos de forma permanente.')) {
-        localStorage.clear();
-        window.location.reload();
+  const handleUpdateSettings = async (newSettings: Partial<UserSettings>) => {
+    const updatedSettings = { ...settings, ...newSettings };
+    setSettings(updatedSettings);
+    if (user) {
+      await handleSupabaseResponse(supabase.from('settings').upsert({ ...updatedSettings, user_id: user.id }));
     }
   };
 
-  const handleResetSettings = () => {
-    setUser(prev => ({
-        name: prev.name,
-        profilePic: prev.profilePic,
-        theme: exampleUser.theme,
-        themeStyle: exampleUser.themeStyle,
-        pinEnabled: exampleUser.pinEnabled,
-        pin: exampleUser.pin,
-        notificationsEnabled: exampleUser.notificationsEnabled,
-        defaultCurrency: exampleUser.defaultCurrency,
-    }));
+  const handleNavigateToAuth = (view: 'signIn' | 'signUp') => {
+    localStorage.setItem('hasSeenGetStarted', 'true');
+    setAuthInitialView(view);
+    setPreAuthStep('auth');
   };
 
-  const handleSetPin = (pin: string) => {
-    handleUpdateUser({ pin, pinEnabled: true });
-    setPinSetupOpen(false);
-  };
-  
-  const handleTogglePin = (enabled: boolean) => {
-    if(enabled) {
-        setPinSetupOpen(true);
-    } else {
-        handleUpdateUser({ pin: undefined, pinEnabled: false });
-    }
+  const handleBackToGetStarted = () => {
+    localStorage.removeItem('hasSeenGetStarted');
+    setPreAuthStep('getStarted');
   };
 
-  const addTransaction = (transaction: Omit<Transaction, 'id'>, taskIdToLink?: string) => {
-    const newTransaction: Transaction = {
-      id: crypto.randomUUID(),
-      ...transaction,
-    };
-    setTransactions(prev => [newTransaction, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || (b.time || '').localeCompare(a.time || '')));
-    
-    if (taskIdToLink) {
-        // Find the task and mark it as complete, and link the transaction
-        const task = tasks.find(t => t.id === taskIdToLink);
-        if (task) {
-            updateTask({id: taskIdToLink, transactionId: newTransaction.id, isCompleted: true });
-        }
-    }
-
-    setAddTransactionFormOpen(false);
-    setPrefillDataForTransaction(null);
-
-    return newTransaction;
-  };
-
-  const deleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-    if (selectedTransaction?.id === id) {
-      setSelectedTransaction(null);
-    }
-    // Also unlink from any task
-    setTasks(prev => prev.map(task => task.transactionId === id ? { ...task, transactionId: undefined } : task));
+  const closeModal = () => {
+    setModal(null);
+    setItemToEdit(null);
+    setPrefillData(null);
   };
   
-  const addTransfer = (transfer: Omit<Transaction, 'id' | 'type' | 'category' | 'description'>) => {
-    const toAccountName = accounts.find(a => a.id === transfer.transferToAccountId)?.name;
-
-    const transferId = crypto.randomUUID();
-    const expense: Transaction = {
-      id: transferId,
-      description: `Transferencia a ${toAccountName}`,
-      amount: transfer.amount,
-      type: 'transfer',
-      category: 'Transferencia',
-      date: transfer.date,
-      time: transfer.time,
-      currency: transfer.currency,
-      accountId: transfer.accountId,
-      transferToAccountId: transfer.transferToAccountId,
-    };
-    
-    setTransactions(prev => [expense, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || (b.time || '').localeCompare(a.time || '')));
-    setAddTransferFormOpen(false);
-    setAddMenuOpen(false);
-    setPrefillTransfer(null);
-  };
-  
-  const addRecurringTransaction = (recTransaction: Omit<RecurringTransaction, 'id' | 'nextDueDate'>) => {
-    const newRecTransaction: RecurringTransaction = {
-      ...recTransaction,
-      id: crypto.randomUUID(),
-      nextDueDate: recTransaction.startDate, // Initial due date is the start date
-    };
-    setRecurringTransactions(prev => [newRecTransaction, ...prev]);
-    setAddRecurringFormOpen(false);
-    setAddMenuOpen(false);
-  };
-
-  const updateRecurringTransaction = (recTransactionToUpdate: Partial<RecurringTransaction> & { id: string }) => {
-    setRecurringTransactions(prev => prev.map(rt => rt.id === recTransactionToUpdate.id ? { ...rt, ...recTransactionToUpdate } : rt));
-    setEditingRecurringTransaction(null);
-    setAddRecurringFormOpen(false);
-  };
-
-  const handleEditRecurringTransaction = (recTransaction: RecurringTransaction) => {
-    setEditingRecurringTransaction(recTransaction);
-    setAddRecurringFormOpen(true);
-  };
-
-  const addAccount = (account: Omit<Account, 'id'>) => {
-    const newAccount: Account = { ...account, id: crypto.randomUUID() };
-    setAccounts(prev => [newAccount, ...prev]);
-    setAddAccountFormOpen(false);
-  };
-  
-  const updateAccount = (accountToUpdate: Partial<Account> & { id: string }) => {
-    setAccounts(prev => prev.map(acc => acc.id === accountToUpdate.id ? { ...acc, ...accountToUpdate } : acc));
-    setEditingAccount(null);
-    setAddAccountFormOpen(false);
-  };
-
-  const deleteAccount = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.accountId !== id && t.transferToAccountId !== id));
-    setRecurringTransactions(prev => prev.filter(rt => rt.accountId !== id));
-    setAccounts(prev => prev.filter(a => a.id !== id));
-  };
-
-  const handleEditAccount = (account: Account) => {
-    setEditingAccount(account);
-    setAddAccountFormOpen(true);
-  };
-
-  const handleAddMoneyToCard = (card: Account) => {
-    setPrefillTransfer({ toAccountId: card.id });
-    setAddTransferFormOpen(true);
-  };
-  
-  const deleteRecurringTransaction = (id: string) => {
-    setRecurringTransactions(prev => prev.filter(rt => rt.id !== id));
-  };
-  
-  const handleAddTask = (taskData: Omit<Task, 'id' | 'isCompleted' | 'transactionId' | 'createdAt' | 'completedAt'>, transactionData?: Omit<Transaction, 'id' | 'description'>) => {
-    let transactionId: string | undefined = undefined;
-    if (transactionData) {
-        const newTransaction = addTransaction({ ...transactionData, description: `Tarea: ${taskData.title}` });
-        transactionId = newTransaction.id;
-    }
-
-    const newTask: Task = {
-        id: crypto.randomUUID(),
-        ...taskData,
-        isCompleted: false,
-        createdAt: new Date().toISOString(),
-        completedAt: null,
-        transactionId,
-    };
-
-    setTasks(prev => [newTask, ...prev].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()));
-    setAddTaskFormOpen(false);
-    setAddMenuOpen(false);
-  };
-
-  const updateTask = (taskToUpdate: Partial<Task> & { id: string }) => {
-    const now = new Date().toISOString();
-    setTasks(prev => prev.map(task => {
-        if (task.id === taskToUpdate.id) {
-            const wasCompleted = task.isCompleted;
-            const isNowCompleted = taskToUpdate.isCompleted;
-            let completedAt = task.completedAt;
-
-            if (isNowCompleted === true && wasCompleted === false) {
-                completedAt = now;
-            } else if (isNowCompleted === false && wasCompleted === true) {
-                completedAt = null;
-            }
-
-            return { ...task, ...taskToUpdate, completedAt };
-        }
-        return task;
-    }));
-    setEditingTask(null);
-    setAddTaskFormOpen(false);
-  };
-
-  const handleToggleTaskCompletion = (task: Task) => {
-    if (!task.isCompleted && !task.transactionId) {
-        setTaskToComplete(task);
-    } else {
-        updateTask({ id: task.id, isCompleted: !task.isCompleted });
-    }
-  };
-
-  const handleCompleteTaskWithTransaction = () => {
-      if (!taskToComplete) return;
-      setPrefillDataForTransaction({
-          description: taskToComplete.title,
-          date: taskToComplete.dueDate,
-          type: 'expense', // Default to expense, user can change it
-      });
-      setAddTransactionFormOpen(true);
-      // The task ID is stored in taskToComplete state and passed to addTransaction
-  };
-
-  const handleCompleteTaskOnly = () => {
-      if (!taskToComplete) return;
-      updateTask({ id: taskToComplete.id, isCompleted: true });
-      setTaskToComplete(null);
-  };
-
-  const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
-  };
-
-  const handleEditTask = (task: Task) => {
-    setEditingTask(task);
-    setAddTaskFormOpen(true);
+  const openModal = (type: 'transaction' | 'account' | 'transfer' | 'recurring' | 'task', item?: any) => {
+    setItemToEdit(item || null);
+    setModal(type);
   };
 
   const accountBalances = useMemo(() => {
@@ -314,256 +163,141 @@ const App: React.FC = () => {
     });
 
     transactions.forEach(t => {
-      const currencyKey = t.currency === 'DOP' ? 'balanceDOP' : 'balanceUSD';
-      
-      if (t.accountId && balances[t.accountId]) {
-        const sourceAccount = accounts.find(a => a.id === t.accountId);
-        if (sourceAccount) {
-          if (sourceAccount.type === 'Tarjeta de Crédito') {
-            if (t.type === 'expense') balances[t.accountId][currencyKey] += t.amount;
-            else if (t.type === 'income') balances[t.accountId][currencyKey] -= t.amount;
-          } else {
-            if (t.type === 'income') balances[t.accountId][currencyKey] += t.amount;
-            else if (t.type === 'expense' || t.type === 'transfer') balances[t.accountId][currencyKey] -= t.amount;
-          }
+      const isDOP = t.currency === 'DOP';
+      if (t.type === 'income') {
+        if (balances[t.accountId]) {
+          isDOP ? balances[t.accountId].balanceDOP += t.amount : balances[t.accountId].balanceUSD += t.amount;
+        }
+      } else if (t.type === 'expense') {
+        if (balances[t.accountId]) {
+          isDOP ? balances[t.accountId].balanceDOP -= t.amount : balances[t.accountId].balanceUSD -= t.amount;
+        }
+      } else if (t.type === 'transfer' && t.transferToAccountId) {
+        if (balances[t.accountId]) {
+          isDOP ? balances[t.accountId].balanceDOP -= t.amount : balances[t.accountId].balanceUSD -= t.amount;
+        }
+        if (balances[t.transferToAccountId]) {
+          isDOP ? balances[t.transferToAccountId].balanceDOP += t.amount : balances[t.transferToAccountId].balanceUSD += t.amount;
         }
       }
-
-      if (t.type === 'transfer' && t.transferToAccountId && balances[t.transferToAccountId]) {
-          const destAccount = accounts.find(a => a.id === t.transferToAccountId);
-          if(destAccount) {
-            if(destAccount.type === 'Tarjeta de Crédito') {
-                balances[t.transferToAccountId][currencyKey] -= t.amount;
-            } else {
-                balances[t.transferToAccountId][currencyKey] += t.amount;
-            }
-          }
-      }
     });
+
     return balances;
   }, [transactions, accounts]);
+
+  const handleDelete = async (table: string, id: string) => {
+    if (!user) return;
+    if (!window.confirm('¿Estás seguro de que quieres eliminar esto?')) return;
+    
+    await handleSupabaseResponse(supabase.from(table).delete().eq('id', id));
+    fetchData(user);
+    if (selectedTransaction?.id === id) setSelectedTransaction(null);
+  };
+
+  const handleToggleTaskCompletion = async (task: Task) => {
+    if(task.transactionId && !task.isCompleted) {
+        setTaskToComplete(task);
+        return;
+    }
+    await handleAddOrUpdate('tasks', { isCompleted: !task.isCompleted, completedAt: !task.isCompleted ? new Date().toISOString() : null }, task.id);
+  };
   
-  const handleCloseAccountForm = () => {
-    setAddAccountFormOpen(false);
-    setEditingAccount(null);
+  const completeTaskOnly = async (task: Task) => {
+    await handleAddOrUpdate('tasks', { isCompleted: true, completedAt: new Date().toISOString() }, task.id);
+    setTaskToComplete(null);
+  }
+  
+  const completeTaskWithTransaction = async (task: Task) => {
+      const linkedTransaction = transactions.find(t => t.id === task.transactionId);
+      if(linkedTransaction) {
+          await handleAddOrUpdate('transactions', { ...linkedTransaction, date: new Date().toISOString().split('T')[0] });
+      }
+      await handleAddOrUpdate('tasks', { isCompleted: true, completedAt: new Date().toISOString() }, task.id);
+      setTaskToComplete(null);
   };
 
-  const handleCloseRecurringForm = () => {
-    setAddRecurringFormOpen(false);
-    setEditingRecurringTransaction(null);
-  };
-
-  const handleCloseTaskForm = () => {
-    setAddTaskFormOpen(false);
-    setEditingTask(null);
-  };
-
+  if (loading || preAuthStep === 'loading') return <div className="bg-neutral-100 dark:bg-neutral-900 min-h-screen"></div>;
+  
+  if (!session) {
+    if (preAuthStep === 'getStarted') {
+        return <GetStarted onNavigateToAuth={handleNavigateToAuth} />;
+    }
+    return <Auth initialView={authInitialView} onBack={handleBackToGetStarted} />;
+  }
+  
+  if (settings.pinEnabled && !isUnlocked && settings.pin) return <PinLockScreen correctPin={settings.pin} onUnlock={() => setIsUnlocked(true)} />;
+  
   const renderView = () => {
-    switch(view) {
+    switch (view) {
       case 'dashboard':
-        return <Dashboard 
-                  user={user} 
-                  accounts={accounts} 
-                  accountBalances={accountBalances} 
-                  transactions={transactions} 
-                  tasks={tasks}
-                  setView={setView}
-                  onToggleTaskCompletion={handleToggleTaskCompletion}
-                />;
+        return <Dashboard transactions={transactions} accounts={accounts} tasks={tasks} accountBalances={accountBalances} onDeleteTransaction={(id) => handleDelete('transactions', id)} onSelectTransaction={setSelectedTransaction} onViewCalendar={() => setView('calendar')} onViewTasks={() => setView('tasks')} onToggleTaskCompletion={handleToggleTaskCompletion}/>;
       case 'calendar':
-        return <MovementsView 
-                  transactions={transactions} 
-                  accounts={accounts} 
-                  onSelectTransaction={setSelectedTransaction}
-                  onDeleteTransaction={deleteTransaction} 
-                />;
+        return <CalendarView transactions={transactions} accounts={accounts} onSelectTransaction={setSelectedTransaction} onDeleteTransaction={(id) => handleDelete('transactions', id)}/>
       case 'accounts':
-        return (
-            <AccountsList 
-                accounts={accounts}
-                transactions={transactions}
-                accountBalances={accountBalances} 
-                onAddAccount={() => { setEditingAccount(null); setAddAccountFormOpen(true); }} 
-                onDeleteAccount={deleteAccount}
-                onEditAccount={handleEditAccount}
-                onUpdateAccount={updateAccount}
-                onSelectTransaction={setSelectedTransaction}
-                onAddMoneyToCard={handleAddMoneyToCard}
-            />
-        );
-      case 'tasks':
-        return <TasksList 
-                  tasks={tasks} 
-                  onToggleCompletion={handleToggleTaskCompletion}
-                  onDeleteTask={deleteTask}
-                  onEditTask={handleEditTask}
-                  onAddTask={() => { setEditingTask(null); setAddTaskFormOpen(true); }}
-               />;
+        return <AccountsList accounts={accounts} transactions={transactions} accountBalances={accountBalances} onAddAccount={() => openModal('account')} onDeleteAccount={(id) => handleDelete('accounts', id)} onEditAccount={(acc) => openModal('account', acc)} onUpdateAccount={(acc) => handleAddOrUpdate('accounts', acc, acc.id)} onSelectTransaction={setSelectedTransaction} onAddMoneyToCard={(card) => { setPrefillData({ toAccountId: card.id }); openModal('transfer'); }}/>;
       case 'recurring':
-        return <RecurringTransactionList 
-                  recurringTransactions={recurringTransactions} 
-                  accounts={accounts} 
-                  onDelete={deleteRecurringTransaction} 
-                  onEdit={handleEditRecurringTransaction}
-                  onAdd={() => { setEditingRecurringTransaction(null); setAddRecurringFormOpen(true); }}
-                />;
+        return <RecurringTransactionList recurringTransactions={recurringTransactions} accounts={accounts} onDelete={(id) => handleDelete('recurring_transactions', id)} onEdit={(rt) => openModal('recurring', rt)} onAdd={() => openModal('recurring')}/>
+      case 'tasks':
+        return <TasksList tasks={tasks} onToggleCompletion={handleToggleTaskCompletion} onDeleteTask={(id) => handleDelete('tasks', id)} onEditTask={(task) => openModal('task', task)} onAddTask={() => openModal('task')}/>
       case 'notifications':
         return <NotificationsList />;
-      default:
-        return <Dashboard user={user} accounts={accounts} accountBalances={accountBalances} transactions={transactions} tasks={tasks} setView={setView} onToggleTaskCompletion={handleToggleTaskCompletion} />;
+      default: return null;
     }
   }
-  
-  const FormModal: React.FC<{isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode}> = ({isOpen, onClose, title, children}) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-            <div className="relative w-full max-w-md">
-                <button 
-                    onClick={onClose} 
-                    className="absolute -top-10 right-0 text-white bg-neutral-700 rounded-full p-2 hover:bg-neutral-600 transition-colors"
-                    aria-label={`Cerrar ${title}`}
-                >
-                    <X className="w-6 h-6" />
-                </button>
-                {children}
-            </div>
-        </div>
-    );
+
+  const handleAddOrUpdate = async (table: string, data: any, id?: string) => {
+    if (!user) return;
+    id 
+      ? await handleSupabaseResponse(supabase.from(table).update(data).eq('id', id))
+      : await handleSupabaseResponse(supabase.from(table).insert({ ...data, user_id: user.id }));
+    
+    fetchData(user);
+    closeModal();
   };
 
-  if (isLocked) {
-    return <PinLockScreen correctPin={user.pin!} onUnlock={() => setIsLocked(false)} />;
-  }
-
+  const handleAddOrUpdateTask = async (taskData: any, transactionData?: any) => {
+    if (!user) return;
+    let newTransactionId = null;
+    if (transactionData) {
+        const newTransaction = await handleSupabaseResponse(supabase.from('transactions').insert({ ...transactionData, user_id: user.id, description: taskData.title }).select('id').single());
+        if (newTransaction) newTransactionId = newTransaction.id;
+    }
+    await handleAddOrUpdate('tasks', { ...taskData, transactionId: newTransactionId });
+  };
+  
+  const handleSelectAddMenu = (type: 'transaction' | 'transfer' | 'recurring' | 'task') => {
+    setAddMenuOpen(false);
+    openModal(type);
+  };
+  
   return (
-    <div className="min-h-screen font-sans pb-24">
-      <Header 
-        onOpenSettings={() => setSettingsOpen(true)} 
-        onOpenSearch={() => setSearchModalOpen(true)} 
-        setView={setView}
-      />
+    <div className="bg-neutral-100 dark:bg-neutral-900 text-neutral-900 dark:text-white min-h-screen pb-20">
+      <Header onOpenSettings={() => setSettingsOpen(true)} onOpenSearch={() => setSearchOpen(true)} setView={setView}/>
+      <main className="container mx-auto p-4 md:p-8">{renderView()}</main>
 
-      {isSearchModalOpen && (
-        <SearchModal
-          isOpen={isSearchModalOpen}
-          onClose={() => setSearchModalOpen(false)}
-          transactions={transactions}
-          accounts={accounts}
-          onSelectTransaction={(t) => {
-            setSelectedTransaction(t);
-            setSearchModalOpen(false);
-          }}
-        />
-      )}
+      {modal === 'transaction' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddTransactionForm onAddTransaction={(t, f) => handleAddOrUpdate('transactions', t)} onUpdateTransaction={(t, f) => handleAddOrUpdate('transactions', t, t.id)} transactionToEdit={itemToEdit as Transaction | null} accounts={accounts} defaultCurrency={settings.defaultCurrency}/></div></div>}
+      {modal === 'account' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddAccountForm onAddAccount={(acc) => handleAddOrUpdate('accounts', acc)} onUpdateAccount={(acc) => handleAddOrUpdate('accounts', acc, acc.id)} accountToEdit={itemToEdit as Account | null}/></div></div>}
+      {modal === 'transfer' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddTransferForm onAddTransfer={(t) => handleAddOrUpdate('transactions', {...t, type: 'transfer', description: 'Transferencia', category: 'Transferencia'})} accounts={accounts} defaultCurrency={settings.defaultCurrency} prefillData={prefillData}/></div></div>}
+      {modal === 'recurring' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddRecurringTransactionForm onAddRecurring={(rt) => handleAddOrUpdate('recurring_transactions', rt)} onUpdateRecurring={(rt) => handleAddOrUpdate('recurring_transactions', rt, rt.id)} recurringTransactionToEdit={itemToEdit as RecurringTransaction | null} accounts={accounts} defaultCurrency={settings.defaultCurrency}/></div></div>}
+      {modal === 'task' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddTaskForm onAddTask={handleAddOrUpdateTask} onUpdateTask={(t) => handleAddOrUpdate('tasks', t, t.id)} taskToEdit={itemToEdit as Task | null} accounts={accounts} defaultCurrency={settings.defaultCurrency}/></div></div>}
+      {isSettingsOpen && <SettingsPanel user={user} settings={settings} onUpdateSettings={handleUpdateSettings} onClose={() => setSettingsOpen(false)} />}
+      {selectedTransaction && <TransactionDetailModal transaction={selectedTransaction} accounts={accounts} onClose={() => setSelectedTransaction(null)} onDelete={(id) => handleDelete('transactions', id)}/>}
+      {isSearchOpen && <SearchModal isOpen={isSearchOpen} onClose={() => setSearchOpen(false)} transactions={transactions} accounts={accounts} onSelectTransaction={(t) => { setSearchOpen(false); setSelectedTransaction(t); }}/>}
+      {isAddMenuOpen && <AddMenuModal onClose={() => setAddMenuOpen(false)} onSelect={handleSelectAddMenu} />}
+      {isFijosMenuOpen && <FijosMenuModal onClose={() => setFijosMenuOpen(false)} setView={setView} />}
+      {taskToComplete && <CompleteTaskModal task={taskToComplete} onClose={() => setTaskToComplete(null)} onCompleteOnly={() => completeTaskOnly(taskToComplete)} onCompleteWithTransaction={() => completeTaskWithTransaction(taskToComplete)} />}
 
-      <SettingsPanel 
-        isOpen={isSettingsOpen} 
-        onClose={() => setSettingsOpen(false)}
-        user={user}
-        onUpdateUser={handleUpdateUser}
-        onTogglePin={handleTogglePin}
-        onLogout={handleLogout}
-        onResetSettings={handleResetSettings}
-      />
-
-      {isPinSetupOpen && (
-        <PinSetupModal
-            onClose={() => setPinSetupOpen(false)}
-            onSetPin={handleSetPin}
-        />
-      )}
-
-      <main className="container mx-auto p-4 md:p-8">
-        {renderView()}
-      </main>
-
-      <FormModal isOpen={isAddTransactionFormOpen} onClose={() => {setAddTransactionFormOpen(false); setPrefillDataForTransaction(null); setTaskToComplete(null);}} title="formulario de transacción">
-        <AddTransactionForm 
-            onAddTransaction={(t) => addTransaction(t, taskToComplete?.id)} 
-            accounts={accounts} 
-            defaultCurrency={user.defaultCurrency} 
-            prefillData={prefillDataForTransaction}
-        />
-      </FormModal>
-
-      <FormModal isOpen={isAddTransferFormOpen} onClose={() => { setAddTransferFormOpen(false); setPrefillTransfer(null); }} title="formulario de transferencia">
-        <AddTransferForm onAddTransfer={addTransfer} accounts={accounts} defaultCurrency={user.defaultCurrency} prefillData={prefillTransfer}/>
-      </FormModal>
-
-      <FormModal isOpen={isAddRecurringFormOpen} onClose={handleCloseRecurringForm} title="formulario de transacción fija">
-        <AddRecurringTransactionForm 
-            onAddRecurring={addRecurringTransaction} 
-            onUpdateRecurring={updateRecurringTransaction}
-            recurringTransactionToEdit={editingRecurringTransaction}
-            accounts={accounts} 
-            defaultCurrency={user.defaultCurrency} />
-      </FormModal>
-
-      <FormModal isOpen={isAddAccountFormOpen} onClose={handleCloseAccountForm} title="formulario de cuenta">
-        <AddAccountForm 
-          onAddAccount={addAccount} 
-          onUpdateAccount={updateAccount}
-          accountToEdit={editingAccount}
-        />
-      </FormModal>
-
-      <FormModal isOpen={isAddTaskFormOpen} onClose={handleCloseTaskForm} title="formulario de tarea">
-          <AddTaskForm 
-            onAddTask={handleAddTask}
-            onUpdateTask={updateTask}
-            taskToEdit={editingTask}
-            accounts={accounts}
-            defaultCurrency={user.defaultCurrency}
-          />
-      </FormModal>
-      
-      {selectedTransaction && (
-        <TransactionDetailModal 
-          transaction={selectedTransaction} 
-          accounts={accounts}
-          onClose={() => setSelectedTransaction(null)} 
-          onDelete={deleteTransaction}
-        />
-      )}
-
-      {taskToComplete && !isAddTransactionFormOpen && (
-          <CompleteTaskModal
-              task={taskToComplete}
-              onClose={() => setTaskToComplete(null)}
-              onCompleteWithTransaction={handleCompleteTaskWithTransaction}
-              onCompleteOnly={handleCompleteTaskOnly}
-          />
-      )}
-
-      {isAddMenuOpen && (
-        <AddMenuModal 
-            onClose={() => setAddMenuOpen(false)}
-            onSelect={(type) => {
-                if (type === 'transaction') setAddTransactionFormOpen(true);
-                if (type === 'transfer') setAddTransferFormOpen(true);
-                if (type === 'recurring') { setEditingRecurringTransaction(null); setAddRecurringFormOpen(true); }
-                if (type === 'task') { setEditingTask(null); setAddTaskFormOpen(true); }
-                setAddMenuOpen(false);
-            }}
-        />
-      )}
-      
-       {isFijosMenuOpen && (
-        <FijosMenuModal
-            onClose={() => setFijosMenuOpen(false)}
-            setView={setView}
-        />
-       )}
-
-      <BottomNavBar 
-        activeView={view} 
-        setView={setView} 
-        openAddMenu={() => setAddMenuOpen(true)}
-        openFijosMenu={() => setFijosMenuOpen(true)}
-      />
+      <BottomNavBar activeView={view} setView={setView} openAddMenu={() => setAddMenuOpen(true)} openFijosMenu={() => setFijosMenuOpen(true)}/>
     </div>
   );
 };
+
+// A helper constant for theme colors used in JS.
+const COLOR_THEMES = [
+    { name: 'default', primary: '79 70 229', secondary: '236 72 153' },
+    { name: 'forest', primary: '22 163 74', secondary: '249 115 22' },
+    { name: 'sunset', primary: '147 51 234', secondary: '245 158 11' },
+    { name: 'ocean', primary: '59 130 246', secondary: '20 184 166' },
+];
 
 export default App;

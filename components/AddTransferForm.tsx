@@ -8,7 +8,8 @@ import Select from './ui/Select';
 import { ArrowRightLeft } from 'lucide-react';
 
 interface AddTransferFormProps {
-  onAddTransfer: (transfer: Omit<Transaction, 'id' | 'type' | 'category' | 'description'>) => void;
+  // FIX: Omit user_id as it is handled by the parent component.
+  onAddTransfer: (transfer: Omit<Transaction, 'id' | 'user_id' | 'type' | 'category' | 'description'>) => void;
   accounts: Account[];
   defaultCurrency?: Currency;
   prefillData?: { toAccountId: string } | null;

@@ -1,47 +1,30 @@
+// FIX: This file was missing. Added full implementation for the Avatar component.
 import React from 'react';
 
 interface AvatarProps {
-  src?: string;
-  name: string;
-  size?: 'sm' | 'md' | 'lg';
+  src?: string | null;
+  name?: string | null;
+  className?: string;
 }
 
-const Avatar: React.FC<AvatarProps> = ({ src, name, size = 'md' }) => {
-  const getInitials = (name: string) => {
-    if (!name) return '?';
-    const names = name.split(' ');
-    const initials = names.map(n => n[0]).slice(0, 2).join('');
-    return initials.toUpperCase();
+const Avatar: React.FC<AvatarProps> = ({ src, name, className = 'w-16 h-16' }) => {
+  const getInitials = (userName?: string): string => {
+    if (!userName) return '';
+    const names = userName.split(' ');
+    if (names.length > 1 && names[0] && names[names.length - 1]) {
+      return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    }
+    return userName.substring(0, 2).toUpperCase();
   };
-  
-  const sizeClasses = {
-    sm: 'w-8 h-8 text-xs',
-    md: 'w-10 h-10 text-sm',
-    lg: 'w-16 h-16 text-xl',
-  };
-
-  const colorClasses = [
-    'bg-red-500', 'bg-green-500', 'bg-blue-500', 'bg-yellow-500', 
-    'bg-indigo-500', 'bg-purple-500', 'bg-pink-500'
-  ];
-  
-  const colorIndex = name.charCodeAt(0) % colorClasses.length;
-  const bgColor = colorClasses[colorIndex];
 
   return (
-    <div className={`relative flex-shrink-0 ${sizeClasses[size]}`}>
+    <div className={`relative inline-flex items-center justify-center overflow-hidden bg-neutral-200 dark:bg-neutral-700 rounded-full ${className}`}>
       {src ? (
-        <img
-          src={src}
-          alt={name}
-          className="w-full h-full rounded-full object-cover"
-        />
+        <img className="w-full h-full object-cover" src={src} alt={name || 'User avatar'} />
       ) : (
-        <div
-          className={`w-full h-full rounded-full flex items-center justify-center font-bold text-white ${bgColor}`}
-        >
-          {getInitials(name)}
-        </div>
+        <span className="font-medium text-neutral-600 dark:text-neutral-300">
+          {getInitials(name || undefined)}
+        </span>
       )}
     </div>
   );

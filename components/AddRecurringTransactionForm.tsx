@@ -8,7 +8,8 @@ import { Repeat } from 'lucide-react';
 import { CATEGORIES, RECURRING_FREQUENCIES } from '../constants';
 
 interface AddRecurringTransactionFormProps {
-  onAddRecurring: (transaction: Omit<RecurringTransaction, 'id' | 'nextDueDate'>) => void;
+  // FIX: Omit user_id as it is handled by the parent component.
+  onAddRecurring: (transaction: Omit<RecurringTransaction, 'id' | 'user_id' | 'nextDueDate'>) => void;
   onUpdateRecurring: (transaction: Partial<RecurringTransaction> & { id: string }) => void;
   recurringTransactionToEdit: RecurringTransaction | null;
   accounts: Account[];

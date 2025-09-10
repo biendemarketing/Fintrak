@@ -8,7 +8,8 @@ import { Landmark, CreditCard } from 'lucide-react';
 import { ACCOUNT_TYPES, BANKS_DO, CARD_BRANDS } from '../constants';
 
 interface AddAccountFormProps {
-  onAddAccount: (account: Omit<Account, 'id'>) => void;
+  // FIX: Omit user_id as it is handled by the parent component.
+  onAddAccount: (account: Omit<Account, 'id' | 'user_id'>) => void;
   onUpdateAccount: (account: Partial<Account> & { id: string }) => void;
   accountToEdit: Account | null;
 }

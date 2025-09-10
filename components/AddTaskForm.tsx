@@ -9,7 +9,8 @@ import { ListChecks } from 'lucide-react';
 import { CATEGORIES } from '../constants';
 
 interface AddTaskFormProps {
-  onAddTask: (taskData: Omit<Task, 'id' | 'isCompleted' | 'transactionId' | 'createdAt' | 'completedAt'>, transactionData?: Omit<Transaction, 'id' | 'description'>) => void;
+  // FIX: Omit user_id as it is handled by the parent component.
+  onAddTask: (taskData: Omit<Task, 'id' | 'user_id' | 'isCompleted' | 'transactionId' | 'createdAt' | 'completedAt'>, transactionData?: Omit<Transaction, 'id' | 'user_id' | 'description'>) => void;
   onUpdateTask: (task: Partial<Task> & { id: string }) => void;
   taskToEdit: Task | null;
   accounts: Account[];
