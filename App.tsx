@@ -105,7 +105,7 @@ const App: React.FC = () => {
       handleSupabaseResponse(supabase.from('transactions').select('*').eq('user_id', currentUser.id).order('date', { ascending: false }).order('time', { ascending: false, nullsFirst: true })),
       handleSupabaseResponse(supabase.from('recurring_transactions').select('*').eq('user_id', currentUser.id)),
       handleSupabaseResponse(supabase.from('tasks').select('*').eq('user_id', currentUser.id)),
-      handleSupabaseResponse(supabase.from('settings').select('*').eq('user_id', currentUser.id).single()),
+      handleSupabaseResponse(supabase.from('profiles').select('*').eq('id', currentUser.id).single()),
     ]);
     
     if (accountsData) setAccounts(accountsData);
@@ -130,7 +130,7 @@ const App: React.FC = () => {
     const updatedSettings = { ...settings, ...newSettings };
     setSettings(updatedSettings);
     if (user) {
-      await handleSupabaseResponse(supabase.from('settings').upsert({ ...updatedSettings, user_id: user.id }));
+      await handleSupabaseResponse(supabase.from('profiles').update(newSettings).eq('id', user.id));
     }
   };
 
