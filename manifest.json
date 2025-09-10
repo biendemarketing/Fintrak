@@ -1,0 +1,24 @@
+{
+  "short_name": "FinTrack",
+  "name": "FinTrack - Controla Tus Cuartos",
+  "description": "Una aplicación para controlar tus finanzas personales al estilo dominicano.",
+  "icons": [
+    {
+      "src": "https://psqewnhpietbdjpvmyof.supabase.co/storage/v1/object/public/images/FinTrak%20Logo_192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "https://psqewnhpietbdjpvmyof.supabase.co/storage/v1/object/public/images/FinTrak%20Logo_512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#111827",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#4F46E5"
+}
