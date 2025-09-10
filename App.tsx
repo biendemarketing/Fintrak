@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 // FIX: Add file extension to fix module resolution error.
@@ -9,6 +8,8 @@ import type { View, Transaction, Account, UserProfile, RecurringTransaction, Tas
 import { resizeImage } from './utils/image.ts';
 // FIX: Add file extension to fix module resolution error.
 import { calculateNextDueDate } from './utils/date.ts';
+import { COLOR_THEMES } from './constants.ts';
+
 
 // Components
 import Header from './components/Header.tsx';
@@ -75,7 +76,7 @@ const App: React.FC = () => {
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
     const [transferPrefill, setTransferPrefill] = useState<{ toAccountId: string } | null>(null);
 
-    // Dark Mode & Theme Handling
+    // Dark Mode Handling
     useEffect(() => {
         const applyTheme = () => {
             // Apply dark mode
@@ -87,9 +88,22 @@ const App: React.FC = () => {
         };
 
         applyTheme();
+        // Listen for changes from the settings panel
         window.addEventListener('storage', applyTheme);
         return () => window.removeEventListener('storage', applyTheme);
     }, []);
+
+    // Color Theme Application Effect
+    useEffect(() => {
+        if (userProfile?.theme) {
+            const selectedTheme = COLOR_THEMES.find(t => t.name === userProfile.theme);
+            if (selectedTheme) {
+                const root = document.documentElement;
+                root.style.setProperty('--color-brand-primary', selectedTheme.primary);
+                root.style.setProperty('--color-brand-secondary', selectedTheme.secondary);
+            }
+        }
+    }, [userProfile]);
     
     // Auth Effect
     useEffect(() => {
