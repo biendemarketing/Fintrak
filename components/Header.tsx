@@ -1,65 +1,53 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Wallet, Search, Bell } from 'lucide-react';
-import NotificationsDropdown from './NotificationsDropdown.tsx';
+import React from 'react';
 // FIX: Add file extension to fix module resolution error.
-import type { View } from '../types.ts';
+import type { UserProfile } from '../types.ts';
+import { Search, Bell } from 'lucide-react';
+// FIX: Add file extension to fix module resolution error.
+import Avatar from './ui/Avatar.tsx';
 
 interface HeaderProps {
+  userProfile: UserProfile | null;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
-  setView: (view: View) => void;
+  onOpenNotifications: () => void;
+  notificationCount?: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenSearch, setView }) => {
-  const [isNotificationsOpen, setNotificationsOpen] = useState(false);
-  const notificationsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-        setNotificationsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const NavIconButton: React.FC<{onClick: () => void; label: string; children: React.ReactNode}> = ({ onClick, label, children }) => (
-    <button
-      onClick={onClick}
-      className="p-2 text-neutral-600 dark:text-neutral-200 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-full transition-colors"
-      aria-label={label}
-    >
-      {children}
-    </button>
-  );
+const Header: React.FC<HeaderProps> = ({ userProfile, onOpenSettings, onOpenSearch, onOpenNotifications, notificationCount = 0 }) => {
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Buenos días';
+    if (hour < 18) return 'Buenas tardes';
+    return 'Buenas noches';
+  };
+  
+  const userName = userProfile?.first_name || 'Usuario';
 
   return (
-    <header className="bg-neutral-100/80 dark:bg-neutral-800/50 backdrop-blur-sm shadow-lg sticky top-0 z-20 border-b border-neutral-200 dark:border-neutral-700/50">
-      <div className="container mx-auto px-4 md:px-8 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Wallet className="w-7 h-7 text-brand-primary" />
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white">
-            FinTrack
-          </h1>
+    <header className="flex items-center justify-between py-4">
+      <div className="flex items-center space-x-4">
+        <div onClick={onOpenSettings} className="cursor-pointer">
+           <Avatar name={`${userProfile?.first_name} ${userProfile?.last_name}`} src={userProfile?.avatar_url} size="md" />
         </div>
-        <div className="flex items-center space-x-2">
-          <NavIconButton onClick={onOpenSearch} label="Buscar transacciones">
-            <Search className="w-6 h-6" />
-          </NavIconButton>
-          
-          <div className="relative" ref={notificationsRef}>
-            <NavIconButton onClick={() => setNotificationsOpen(prev => !prev)} label="Ver notificaciones">
-              <Bell className="w-6 h-6" />
-            </NavIconButton>
-            <NotificationsDropdown isOpen={isNotificationsOpen} setView={setView} />
-          </div>
-
-          <NavIconButton onClick={onOpenSettings} label="Abrir ajustes">
-            <Menu className="w-6 h-6" />
-          </NavIconButton>
+        <div>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">{getGreeting()}</p>
+          <h1 className="text-xl font-bold text-neutral-900 dark:text-white">{userName}</h1>
         </div>
+      </div>
+      <div className="flex items-center space-x-2">
+         <button onClick={onOpenSearch} className="p-3 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <Search className="w-6 h-6 text-neutral-700 dark:text-neutral-200" />
+         </button>
+         <button onClick={onOpenNotifications} className="relative p-3 rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <Bell className="w-6 h-6 text-neutral-700 dark:text-neutral-200" />
+            {notificationCount > 0 && (
+                <span className="absolute top-2 right-2 flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-secondary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-brand-secondary text-white text-xs items-center justify-center">{notificationCount}</span>
+                </span>
+            )}
+         </button>
       </div>
     </header>
   );
