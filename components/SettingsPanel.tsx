@@ -1,24 +1,20 @@
-import React, { useState } from 'react';
-import { X, User, Palette, Lock, LogOut, Sun, Moon } from 'lucide-react';
-// FIX: Add file extension to fix module resolution error.
-import type { UserProfile, Settings, ThemeName } from '../types.ts';
-// FIX: Add file extension to fix module resolution error.
+import React, { useState, useEffect } from 'react';
+import { User as AuthUser } from '@supabase/supabase-js';
+import { X, User, Palette, Lock, LogOut, Sun, Moon, Save, Camera, Edit2 } from 'lucide-react';
+import type { UserProfile, ThemeName } from '../types.ts';
 import { COLOR_THEMES } from '../constants.ts';
-// FIX: Add file extension to fix module resolution error.
 import Avatar from './ui/Avatar.tsx';
-// FIX: Add file extension to fix module resolution error.
 import Button from './ui/Button.tsx';
-// FIX: Add file extension to fix module resolution error.
 import ToggleSwitch from './ui/ToggleSwitch.tsx';
-// FIX: Add file extension to fix module resolution error.
 import PinSetupModal from './PinSetupModal.tsx';
+import Input from './ui/Input.tsx';
 
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  user: UserProfile | null;
-  settings: Settings;
-  onUpdateSettings: (newSettings: Partial<Settings>) => void;
+  user: AuthUser | null;
+  userProfile: UserProfile | null;
+  onUpdateProfile: (updatedProfile: Partial<UserProfile>, avatarFile?: File | null) => void;
   onLogout: () => void;
 }
 
@@ -34,24 +30,60 @@ const SettingsSection: React.FC<{ icon: React.ElementType, title: string, childr
   </div>
 );
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, user, settings, onUpdateSettings, onLogout }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, user, userProfile, onUpdateProfile, onLogout }) => {
   const [isPinModalOpen, setPinModalOpen] = useState(false);
   const isDarkMode = document.documentElement.classList.contains('dark');
+  
+  // Form state for profile editing
+  const [firstName, setFirstName] = useState(userProfile?.first_name || '');
+  const [lastName, setLastName] = useState(userProfile?.last_name || '');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(userProfile?.avatar_url || null);
 
-  const handleThemeChange = (themeName: ThemeName) => {
-    onUpdateSettings({ theme: themeName });
+  useEffect(() => {
+    if (userProfile) {
+      setFirstName(userProfile.first_name || '');
+      setLastName(userProfile.last_name || '');
+      setAvatarPreview(userProfile.avatar_url || null);
+    }
+  }, [userProfile]);
+  
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileSave = () => {
+    const updatedProfile: Partial<UserProfile> = {
+      first_name: firstName,
+      last_name: lastName,
+    };
+    onUpdateProfile(updatedProfile, avatarFile);
+    // Optionally close panel after save, or show a success message
+    // onClose();
+  };
+  
+  const handleSettingsUpdate = (updatedSettings: Partial<UserProfile>) => {
+    onUpdateProfile(updatedSettings, null);
   };
   
   const handlePinToggle = (isEnabled: boolean) => {
-    if (isEnabled && !settings.pin) {
+    if (isEnabled && !userProfile?.pin) {
       setPinModalOpen(true);
     } else {
-      onUpdateSettings({ isPinEnabled: isEnabled });
+      handleSettingsUpdate({ isPinEnabled: isEnabled });
     }
   };
 
   const handleSetPin = (pin: string) => {
-    onUpdateSettings({ pin, isPinEnabled: true });
+    handleSettingsUpdate({ pin, isPinEnabled: true });
     setPinModalOpen(false);
   };
   
@@ -63,14 +95,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, user, se
           document.documentElement.classList.add('dark');
           localStorage.setItem('theme', 'dark');
       }
-      // This is a bit of a hack to force re-render on some components that don't auto-update
       window.dispatchEvent(new Event('storage'));
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !userProfile) return null;
   
-  const userName = user ? `${user.first_name} ${user.last_name}` : 'Invitado';
-
   return (
     <>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30" onClick={onClose} />
@@ -85,12 +114,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, user, se
 
           <main className="flex-1 overflow-y-auto p-4">
             <SettingsSection icon={User} title="Perfil">
-              <div className="flex items-center space-x-4">
-                <Avatar name={userName} src={user?.avatar_url} size="md" />
-                <div>
-                  <p className="font-semibold text-lg">{userName}</p>
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">{user?.id.substring(0,8)}...</p>
+              <div className="flex flex-col items-center space-y-4">
+                <div className="relative group">
+                  <Avatar name={`${firstName} ${lastName}`} src={avatarPreview} size="lg" />
+                  <label htmlFor="avatar-upload" className="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 rounded-full cursor-pointer transition-opacity">
+                    <Camera className="w-8 h-8"/>
+                  </label>
+                  <input type="file" id="avatar-upload" className="hidden" accept="image/*" onChange={handleAvatarChange} />
                 </div>
+                 <div className="w-full space-y-3">
+                    <Input type="text" placeholder="Nombre" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                    <Input type="text" placeholder="Apellido" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                    <Button onClick={handleProfileSave} className="w-full flex items-center justify-center space-x-2 !transform-none">
+                        <Save className="w-5 h-5" />
+                        <span>Guardar Perfil</span>
+                    </Button>
+                 </div>
+                 <p className="text-sm text-neutral-500 dark:text-neutral-400 w-full text-center border-t border-neutral-700 pt-4">{user?.email}</p>
               </div>
             </SettingsSection>
 
@@ -107,8 +147,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, user, se
                     {COLOR_THEMES.map(theme => (
                         <button
                         key={theme.name}
-                        onClick={() => handleThemeChange(theme.name)}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center ring-2 ring-offset-2 ring-offset-neutral-100 dark:ring-offset-neutral-900 transition-all ${settings.theme === theme.name ? 'ring-brand-primary' : 'ring-transparent'}`}
+                        onClick={() => handleSettingsUpdate({ theme: theme.name })}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ring-2 ring-offset-2 ring-offset-neutral-100 dark:ring-offset-neutral-900 transition-all ${userProfile.theme === theme.name ? 'ring-brand-primary' : 'ring-transparent'}`}
                         style={{ background: `linear-gradient(45deg, rgb(${theme.primary}), rgb(${theme.secondary}))` }}
                         aria-label={`Seleccionar tema ${theme.label}`}
                         />
@@ -120,11 +160,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ isOpen, onClose, user, se
             <SettingsSection icon={Lock} title="Seguridad">
                 <div className="flex items-center justify-between">
                     <span>Bloqueo con PIN</span>
-                    <ToggleSwitch id="pin-lock" isChecked={settings.isPinEnabled} onChange={handlePinToggle} />
+                    <ToggleSwitch id="pin-lock" isChecked={userProfile.isPinEnabled} onChange={handlePinToggle} />
                 </div>
-                {settings.pin && (
-                    <Button onClick={() => setPinModalOpen(true)} className="w-full !bg-neutral-600 hover:!bg-neutral-500 !transform-none">
-                        Cambiar PIN
+                {userProfile.pin && (
+                    <Button onClick={() => setPinModalOpen(true)} className="w-full !bg-neutral-600 hover:!bg-neutral-500 !transform-none flex items-center justify-center space-x-2">
+                        <Edit2 className="w-4 h-4" />
+                        <span>Cambiar PIN</span>
                     </Button>
                 )}
             </SettingsSection>

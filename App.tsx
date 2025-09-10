@@ -1,12 +1,9 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-// FIX: Add file extension to fix module resolution error.
 import { supabase } from './lib/supabase.ts';
-// FIX: Add file extension to fix module resolution error.
-import type { View, Transaction, Account, RecurringTransaction, Task, Budget, Settings, UserProfile } from './types.ts';
-// FIX: Add file extension to fix module resolution error.
+import type { View, Transaction, Account, RecurringTransaction, Task, Budget, UserProfile } from './types.ts';
 import { resizeImage } from './utils/image.ts';
-// FIX: Add file extension to fix module resolution error.
 import { calculateNextDueDate } from './utils/date.ts';
 
 // Components
@@ -36,14 +33,15 @@ import AddBudgetForm from './components/AddBudgetForm.tsx';
 import TransactionDetailModal from './components/TransactionDetailModal.tsx';
 import SearchModal from './components/SearchModal.tsx';
 import CompleteTaskModal from './components/CompleteTaskModal.tsx';
-// FIX: Add file extension to fix module resolution error.
 import { COLOR_THEMES } from './constants.ts';
 
 const App: React.FC = () => {
     // Auth State
     const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
-    const [profile, setProfile] = useState<UserProfile | null>(null);
+    
+    // Unified Profile & Settings State
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
     // App State
     const [loading, setLoading] = useState(true);
@@ -70,13 +68,6 @@ const App: React.FC = () => {
     const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
     const [transferPrefill, setTransferPrefill] = useState<{ toAccountId: string } | null>(null);
     
-    // Settings
-    const [settings, setSettings] = useState<Settings>({
-        theme: 'default',
-        defaultCurrency: 'DOP',
-        pin: null,
-        isPinEnabled: false,
-    });
     const [isSettingsOpen, setSettingsOpen] = useState(false);
     const [isSearchOpen, setSearchOpen] = useState(false);
     
@@ -91,7 +82,6 @@ const App: React.FC = () => {
             }
         });
         
-        // Initial session load
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setUser(session?.user ?? null);
@@ -111,7 +101,6 @@ const App: React.FC = () => {
                 recurringRes,
                 tasksRes,
                 budgetsRes,
-                settingsRes,
             ] = await Promise.all([
                 supabase.from('profiles').select('*').eq('id', user.id).single(),
                 supabase.from('transactions').select('*').order('date', { ascending: false }),
@@ -119,27 +108,26 @@ const App: React.FC = () => {
                 supabase.from('recurring_transactions').select('*'),
                 supabase.from('tasks').select('*'),
                 supabase.from('budgets').select('*'),
-                supabase.from('settings').select('*').eq('user_id', user.id).single(),
             ]);
 
-            if (profileRes.data) setProfile(profileRes.data);
+            if (profileRes.data) {
+                setUserProfile(profileRes.data);
+                if (profileRes.data.isPinEnabled && profileRes.data.pin) {
+                    setUnlocked(false);
+                } else {
+                    setUnlocked(true);
+                }
+            } else if (profileRes.error) {
+                console.error("Profile fetch error, maybe it's not created yet:", profileRes.error);
+                // The DB trigger should handle profile creation, this is a fallback state
+                setUnlocked(true);
+            }
+            
             if (transactionsRes.data) setTransactions(transactionsRes.data);
             if (accountsRes.data) setAccounts(accountsRes.data);
             if (recurringRes.data) setRecurringTransactions(recurringRes.data);
             if (tasksRes.data) setTasks(tasksRes.data);
             if (budgetsRes.data) setBudgets(budgetsRes.data);
-            if (settingsRes.data) {
-                setSettings(settingsRes.data);
-                if (settingsRes.data.isPinEnabled && settingsRes.data.pin) {
-                    setUnlocked(false);
-                } else {
-                    setUnlocked(true);
-                }
-            } else if (settingsRes.error) {
-                const { data } = await supabase.from('settings').insert({ user_id: user.id }).select().single();
-                if (data) setSettings(data);
-                setUnlocked(true);
-            }
 
         } catch (error) {
             console.error("Error fetching initial data:", error);
@@ -152,25 +140,23 @@ const App: React.FC = () => {
         if (user) {
             fetchInitialData();
         } else {
-            // Clear data on logout
             setTransactions([]);
             setAccounts([]);
             setRecurringTransactions([]);
             setTasks([]);
             setBudgets([]);
-            setProfile(null);
+            setUserProfile(null);
             setUnlocked(false);
         }
     }, [user, fetchInitialData]);
     
-    // Theme application effect
     useEffect(() => {
-        const theme = COLOR_THEMES.find(t => t.name === settings.theme) || COLOR_THEMES[0];
-        document.documentElement.style.setProperty('--color-primary', theme.primary);
-        document.documentElement.style.setProperty('--color-secondary', theme.secondary);
-    }, [settings.theme]);
+        const themeName = userProfile?.theme || 'default';
+        const theme = COLOR_THEMES.find(t => t.name === themeName) || COLOR_THEMES[0];
+        document.documentElement.style.setProperty('--color-brand-primary', theme.primary);
+        document.documentElement.style.setProperty('--color-brand-secondary', theme.secondary);
+    }, [userProfile?.theme]);
 
-    // Derived State
     const accountBalances = useMemo(() => {
         const balances: { [key: string]: { balanceDOP: number, balanceUSD: number } } = {};
         accounts.forEach(acc => {
@@ -198,7 +184,6 @@ const App: React.FC = () => {
         return balances;
     }, [transactions, accounts]);
 
-    // Handlers
     const handleCloseModal = () => {
         setActiveModal(null);
         setTransactionToEdit(null);
@@ -211,9 +196,9 @@ const App: React.FC = () => {
 
     const handleSelectTransaction = (transaction: Transaction) => setSelectedTransaction(transaction);
     
-    // CRUD Operations
     const crudOperation = async <T,>(
-        operation: Promise<{ data: T | T[] | null; error: any }>,
+        // FIX: Change `Promise` to `PromiseLike` to allow passing Supabase's thenable query builders.
+        operation: PromiseLike<{ data: T | T[] | null; error: any }>,
         onSuccess: (data: T | T[]) => void,
         closeModal = true
     ) => {
@@ -227,7 +212,6 @@ const App: React.FC = () => {
         }
     };
     
-    // Transactions
     const addTransaction = async (transaction: Omit<Transaction, 'id' | 'user_id'>, receiptFile?: File) => {
         let receiptImage;
         if (receiptFile) {
@@ -278,7 +262,6 @@ const App: React.FC = () => {
         setSelectedTransaction(null);
     };
     
-    // Accounts
     const addAccount = async (account: Omit<Account, 'id' | 'user_id'>) => {
         await crudOperation(
             supabase.from('accounts').insert({ ...account, user_id: user!.id }).select().single(),
@@ -296,7 +279,6 @@ const App: React.FC = () => {
 
     const deleteAccount = async (id: string) => {
         if (!window.confirm('¿Eliminar cuenta? Esto también eliminará todos sus movimientos asociados.')) return;
-        // In a real app, you might want to prevent this or handle orphaned transactions.
         await crudOperation(
             supabase.from('accounts').delete().eq('id', id),
             () => {
@@ -307,7 +289,6 @@ const App: React.FC = () => {
         );
     };
 
-    // Transfers
     const addTransfer = async (transfer: Omit<Transaction, 'id' | 'user_id' | 'type' | 'category' | 'description'>) => {
         const transferData = {
             ...transfer,
@@ -322,7 +303,6 @@ const App: React.FC = () => {
         );
     };
 
-    // Recurring Transactions
     const addRecurring = async (rec: Omit<RecurringTransaction, 'id' | 'user_id' | 'nextDueDate'>) => {
         const nextDueDate = calculateNextDueDate(rec.startDate, rec.frequency);
         await crudOperation(
@@ -351,7 +331,6 @@ const App: React.FC = () => {
         );
     };
 
-    // Tasks
     const addTask = async (task: Omit<Task, 'id'|'user_id'|'isCompleted'|'createdAt'|'completedAt'|'transactionId'>, transactionData?: any) => {
         let transactionId;
         if (transactionData) {
@@ -392,7 +371,6 @@ const App: React.FC = () => {
         );
     };
 
-    // Budgets
     const addBudget = async (budget: Omit<Budget, 'id'|'user_id'|'created_at'|'period'>) => {
         await crudOperation(
             supabase.from('budgets').insert({ ...budget, user_id: user!.id, period: 'monthly' }).select().single(),
@@ -417,18 +395,36 @@ const App: React.FC = () => {
         );
     };
 
-    // Settings
-    const updateSettings = async (newSettings: Partial<Settings>) => {
+    const handleUpdateProfile = async (updatedProfile: Partial<UserProfile>, avatarFile?: File | null) => {
+        if (!user || !userProfile) return;
+        let avatar_url = userProfile.avatar_url;
+    
+        if (avatarFile) {
+            const fileName = `${user.id}/${Date.now()}`;
+            const { data, error } = await supabase.storage.from('avatars').upload(fileName, avatarFile);
+            if (error) {
+                console.error('Error uploading avatar:', error);
+            } else {
+                const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(data.path);
+                avatar_url = urlData.publicUrl;
+            }
+        }
+    
+        const profileDataToUpdate = {
+            ...updatedProfile,
+            avatar_url,
+        };
+        delete (profileDataToUpdate as any).id; // No se debe actualizar el ID
+
         await crudOperation(
-            supabase.from('settings').update(newSettings).eq('user_id', user!.id).select().single(),
-            (updated) => setSettings(updated as Settings),
+            supabase.from('profiles').update(profileDataToUpdate).eq('id', user.id).select().single(),
+            (updatedData) => setUserProfile(updatedData as UserProfile),
             false
         );
     };
-
+    
     const handleLogout = async () => { await supabase.auth.signOut(); };
 
-    // Conditional Rendering
     if (!session && !hasSeenGetStarted) {
         return <GetStarted onNavigateToAuth={(view) => {
             setAuthView(view);
@@ -441,8 +437,8 @@ const App: React.FC = () => {
         return <Auth initialView={authView} onBack={() => setHasSeenGetStarted(false)} />;
     }
 
-    if (settings.isPinEnabled && !isUnlocked) {
-        return <PinLockScreen correctPin={settings.pin!} onUnlock={() => setUnlocked(true)} />;
+    if (userProfile?.isPinEnabled && !isUnlocked) {
+        return <PinLockScreen correctPin={userProfile.pin!} onUnlock={() => setUnlocked(true)} />;
     }
 
     const renderView = () => {
@@ -459,17 +455,18 @@ const App: React.FC = () => {
     };
     
     const renderModalContent = () => {
+        if (!userProfile) return null;
         switch (activeModal) {
             case 'addTransaction':
-                return <AddTransactionForm onAddTransaction={addTransaction} onUpdateTransaction={updateTransaction} transactionToEdit={transactionToEdit} accounts={accounts} defaultCurrency={settings.defaultCurrency} />;
+                return <AddTransactionForm onAddTransaction={addTransaction} onUpdateTransaction={updateTransaction} transactionToEdit={transactionToEdit} accounts={accounts} defaultCurrency={userProfile.defaultCurrency} />;
             case 'addAccount':
                 return <AddAccountForm onAddAccount={addAccount} onUpdateAccount={updateAccount} accountToEdit={accountToEdit} />;
             case 'addTransfer':
-                return <AddTransferForm onAddTransfer={addTransfer} accounts={accounts} defaultCurrency={settings.defaultCurrency} prefillData={transferPrefill} />;
+                return <AddTransferForm onAddTransfer={addTransfer} accounts={accounts} defaultCurrency={userProfile.defaultCurrency} prefillData={transferPrefill} />;
             case 'addRecurring':
-                return <AddRecurringTransactionForm onAddRecurring={addRecurring} onUpdateRecurring={updateRecurring} recurringTransactionToEdit={recurringToEdit} accounts={accounts} defaultCurrency={settings.defaultCurrency} />;
+                return <AddRecurringTransactionForm onAddRecurring={addRecurring} onUpdateRecurring={updateRecurring} recurringTransactionToEdit={recurringToEdit} accounts={accounts} defaultCurrency={userProfile.defaultCurrency} />;
             case 'addTask':
-                return <AddTaskForm onAddTask={addTask} onUpdateTask={updateTask} taskToEdit={taskToEdit} accounts={accounts} defaultCurrency={settings.defaultCurrency} />;
+                return <AddTaskForm onAddTask={addTask} onUpdateTask={updateTask} taskToEdit={taskToEdit} accounts={accounts} defaultCurrency={userProfile.defaultCurrency} />;
             case 'addBudget':
                 return <AddBudgetForm onAddBudget={addBudget} onUpdateBudget={updateBudget} budgetToEdit={budgetToEdit} existingBudgets={budgets} />;
             default:
@@ -487,7 +484,6 @@ const App: React.FC = () => {
             </main>
             <BottomNavBar activeView={view} setView={setView} openAddMenu={() => setActiveModal('addMenu')} openFijosMenu={() => setActiveModal('fijosMenu')} />
 
-            {/* Modals */}
             {activeModal === 'addMenu' && <AddMenuModal onClose={handleCloseModal} onSelect={(type) => { setActiveModal(type === 'transaction' ? 'addTransaction' : type === 'transfer' ? 'addTransfer' : type === 'recurring' ? 'addRecurring' : 'addTask') }} />}
             {activeModal === 'fijosMenu' && <FijosMenuModal onClose={handleCloseModal} setView={setView} />}
             
@@ -501,8 +497,8 @@ const App: React.FC = () => {
             
             {selectedTransaction && <TransactionDetailModal transaction={selectedTransaction} accounts={accounts} onClose={() => setSelectedTransaction(null)} onDelete={deleteTransaction} />}
             <SearchModal isOpen={isSearchOpen} onClose={() => setSearchOpen(false)} transactions={transactions} accounts={accounts} onSelectTransaction={(t) => { setSearchOpen(false); handleSelectTransaction(t); }} />
-            <SettingsPanel isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} user={profile} settings={settings} onUpdateSettings={updateSettings} onLogout={handleLogout} />
-            {taskToComplete && <CompleteTaskModal task={taskToComplete} onClose={() => setTaskToComplete(null)} onCompleteOnly={() => { toggleTaskCompletion(taskToComplete); setTaskToComplete(null); }} onCompleteWithTransaction={() => { setActiveModal('addTransaction'); setTaskToComplete(null); /* TODO: prefill transaction form based on task */ }} />}
+            <SettingsPanel isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} user={user} userProfile={userProfile} onUpdateProfile={handleUpdateProfile} onLogout={handleLogout} />
+            {taskToComplete && <CompleteTaskModal task={taskToComplete} onClose={() => setTaskToComplete(null)} onCompleteOnly={() => { toggleTaskCompletion(taskToComplete); setTaskToComplete(null); }} onCompleteWithTransaction={() => { setActiveModal('addTransaction'); setTaskToComplete(null); }} />}
 
         </div>
     );

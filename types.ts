@@ -1,4 +1,4 @@
-// FIX: This file was missing. Added full implementation for all necessary types.
+import type { User } from '@supabase/supabase-js';
 
 export type TransactionType = 'income' | 'expense' | 'transfer';
 export type Currency = 'DOP' | 'USD';
@@ -10,13 +10,11 @@ export type View = 'dashboard' | 'accounts' | 'calendar' | 'tasks' | 'recurring'
 
 export interface UserProfile {
     id: string;
-    first_name: string;
-    last_name: string;
-    avatar_url?: string;
-    date_of_birth?: string;
-}
-
-export interface Settings {
+    first_name: string | null;
+    last_name: string | null;
+    avatar_url: string | null;
+    date_of_birth?: string | null;
+    // Merged settings
     theme: ThemeName;
     defaultCurrency: Currency;
     pin: string | null;

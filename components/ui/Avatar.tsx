@@ -1,19 +1,22 @@
 import React from 'react';
 
 interface AvatarProps {
-  name: string;
-  src?: string;
+  name?: string | null;
+  src?: string | null;
   size?: 'sm' | 'md' | 'lg';
 }
 
 const Avatar: React.FC<AvatarProps> = ({ name, src, size = 'md' }) => {
-  const getInitials = (nameStr: string) => {
+  const getInitials = (nameStr: string | null | undefined): string => {
     if (!nameStr) return '?';
-    const names = nameStr.trim().split(' ');
-    if (names.length === 1) {
-      return names[0].charAt(0).toUpperCase();
-    }
-    return `${names[0].charAt(0)}${names[names.length - 1].charAt(0)}`.toUpperCase();
+    
+    const parts = nameStr.trim().split(' ').filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    
+    const firstInitial = parts[0][0];
+    const lastInitial = parts[parts.length - 1][0];
+    return `${firstInitial}${lastInitial}`.toUpperCase();
   };
 
   const sizeClasses = {
@@ -26,7 +29,7 @@ const Avatar: React.FC<AvatarProps> = ({ name, src, size = 'md' }) => {
     return (
       <img
         src={src}
-        alt={name}
+        alt={name || 'Avatar'}
         className={`rounded-full object-cover ${sizeClasses[size]}`}
       />
     );
