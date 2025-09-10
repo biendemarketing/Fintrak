@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Budget } from '../types';
-import Card from './ui/Card';
-import Input from './ui/Input';
-import Button from './ui/Button';
-import Select from './ui/Select';
+// FIX: Add file extension to fix module resolution error.
+import type { Budget } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Input from './ui/Input.tsx';
+import Button from './ui/Button.tsx';
+import Select from './ui/Select.tsx';
 import { Target } from 'lucide-react';
-import { CATEGORIES } from '../constants';
+import { CATEGORIES } from '../constants.ts';
 
 interface AddBudgetFormProps {
   onAddBudget: (budget: Omit<Budget, 'id' | 'user_id' | 'created_at' | 'period'>) => void;

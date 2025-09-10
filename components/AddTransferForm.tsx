@@ -1,10 +1,12 @@
 
+
 import React, { useState, useEffect } from 'react';
-import type { Transaction, Currency, Account } from '../types';
-import Card from './ui/Card';
-import Input from './ui/Input';
-import Button from './ui/Button';
-import Select from './ui/Select';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Currency, Account } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Input from './ui/Input.tsx';
+import Button from './ui/Button.tsx';
+import Select from './ui/Select.tsx';
 import { ArrowRightLeft } from 'lucide-react';
 
 interface AddTransferFormProps {

@@ -1,10 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
-import type { Transaction, Account, Currency } from '../types';
-import Card from './ui/Card';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Account, Currency } from '../types.ts';
+import Card from './ui/Card.tsx';
 import { ChevronLeft, ChevronRight, CalendarDays, List as ListIcon } from 'lucide-react';
-import DayTransactionsModal from './DayTransactionsModal';
-import SegmentedControl from './ui/SegmentedControl';
-import TransactionList from './TransactionList';
+import DayTransactionsModal from './DayTransactionsModal.tsx';
+import SegmentedControl from './ui/SegmentedControl.tsx';
+import TransactionList from './TransactionList.tsx';
 
 interface MovementsViewProps {
   transactions: Transaction[];
@@ -126,7 +128,7 @@ const Calendar: React.FC<Omit<MovementsViewProps, 'onDeleteTransaction'>> = ({ t
 }
 
 
-const MovementsView: React.FC<MovementsViewProps> = (props) => {
+const CalendarView: React.FC<MovementsViewProps> = (props) => {
     const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
 
     return (
@@ -162,4 +164,4 @@ const MovementsView: React.FC<MovementsViewProps> = (props) => {
     );
 };
 
-export default MovementsView;
+export default CalendarView;

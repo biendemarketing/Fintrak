@@ -1,6 +1,8 @@
+
 import React from 'react';
-import type { Transaction, Account } from '../types';
-import TransactionItem from './TransactionItem';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Account } from '../types.ts';
+import TransactionItem from './TransactionItem.tsx';
 import { List } from 'lucide-react';
 
 interface TransactionListProps {

@@ -1,6 +1,8 @@
 
+
 import React from 'react';
-import type { CardBrand } from '../types';
+// FIX: Add file extension to fix module resolution error.
+import type { CardBrand } from '../types.ts';
 
 interface CardBrandLogoProps {
     brand: CardBrand;

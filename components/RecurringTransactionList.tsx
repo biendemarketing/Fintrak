@@ -1,9 +1,11 @@
+
 import React from 'react';
-import type { RecurringTransaction, Account, Currency } from '../types';
-import Card from './ui/Card';
+// FIX: Add file extension to fix module resolution error.
+import type { RecurringTransaction, Account, Currency } from '../types.ts';
+import Card from './ui/Card.tsx';
 import { Repeat, Trash2, ArrowUpCircle, ArrowDownCircle, Pencil } from 'lucide-react';
-import { calculateNextDueDate } from '../utils/date';
-import Button from './ui/Button';
+import { calculateNextDueDate } from '../utils/date.ts';
+import Button from './ui/Button.tsx';
 
 interface RecurringTransactionListProps {
   recurringTransactions: RecurringTransaction[];

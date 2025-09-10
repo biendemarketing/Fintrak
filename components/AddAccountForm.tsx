@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
-import type { Account, AccountType, CardBrand, Currency } from '../types';
-import CardUI from './ui/Card';
-import Input from './ui/Input';
-import Button from './ui/Button';
-import Select from './ui/Select';
+// FIX: Add file extension to fix module resolution error.
+import type { Account, AccountType, CardBrand, Currency } from '../types.ts';
+import CardUI from './ui/Card.tsx';
+import Input from './ui/Input.tsx';
+import Button from './ui/Button.tsx';
+import Select from './ui/Select.tsx';
 import { Landmark, CreditCard } from 'lucide-react';
-import { ACCOUNT_TYPES, BANKS_DO, CARD_BRANDS } from '../constants';
+import { ACCOUNT_TYPES, BANKS_DO, CARD_BRANDS } from '../constants.ts';
 
 interface AddAccountFormProps {
   // FIX: Omit user_id as it is handled by the parent component.

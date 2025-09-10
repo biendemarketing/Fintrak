@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { LayoutDashboard, Plus, Landmark, ArrowRightLeft, CircleDollarSign } from 'lucide-react';
-import type { View } from '../types';
+// FIX: Add file extension to fix module resolution error.
+import type { View } from '../types.ts';
 
 interface BottomNavBarProps {
     activeView: View;

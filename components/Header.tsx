@@ -1,7 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Menu, Wallet, Search, Bell } from 'lucide-react';
-import NotificationsDropdown from './NotificationsDropdown';
-import type { View } from '../types';
+import NotificationsDropdown from './NotificationsDropdown.tsx';
+// FIX: Add file extension to fix module resolution error.
+import type { View } from '../types.ts';
 
 interface HeaderProps {
   onOpenSettings: () => void;

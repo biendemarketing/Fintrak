@@ -1,11 +1,13 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import type { RecurringTransaction, Currency, Account } from '../types';
-import Card from './ui/Card';
-import Input from './ui/Input';
-import Button from './ui/Button';
-import Select from './ui/Select';
+// FIX: Add file extension to fix module resolution error.
+import type { RecurringTransaction, Currency, Account } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Input from './ui/Input.tsx';
+import Button from './ui/Button.tsx';
+import Select from './ui/Select.tsx';
 import { Repeat } from 'lucide-react';
-import { CATEGORIES, RECURRING_FREQUENCIES } from '../constants';
+import { CATEGORIES, RECURRING_FREQUENCIES } from '../constants.ts';
 
 interface AddRecurringTransactionFormProps {
   // FIX: Omit user_id as it is handled by the parent component.

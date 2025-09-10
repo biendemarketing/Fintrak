@@ -1,5 +1,7 @@
+
 // FIX: This file was missing. Added example data.
-import type { Transaction, Account, RecurringTransaction, Task } from '../types';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Account, RecurringTransaction, Task } from '../types.ts';
 
 export const exampleAccounts: Omit<Account, 'id' | 'user_id'>[] = [
     { name: 'Cuenta Principal', bank: 'Banco Popular', type: 'Cuenta de Ahorro', currency: 'DOP', accountNumber: '**** 1234' },

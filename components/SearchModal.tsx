@@ -1,10 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
 import { X, Search, Filter } from 'lucide-react';
-import type { Transaction, Account, TransactionType } from '../types';
-import Input from './ui/Input';
-import Select from './ui/Select';
-import TransactionItem from './TransactionItem';
-import { CATEGORIES } from '../constants';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Account, TransactionType } from '../types.ts';
+import Input from './ui/Input.tsx';
+import Select from './ui/Select.tsx';
+import TransactionItem from './TransactionItem.tsx';
+import { CATEGORIES } from '../constants.ts';
 
 interface SearchModalProps {
   isOpen: boolean;

@@ -1,6 +1,8 @@
+
 import React from 'react';
-import type { Account, Currency } from '../types';
-import CardBrandLogo from './CardBrandLogo';
+// FIX: Add file extension to fix module resolution error.
+import type { Account, Currency } from '../types.ts';
+import CardBrandLogo from './CardBrandLogo.tsx';
 import { EyeOff } from 'lucide-react';
 
 interface CardDisplayProps {

@@ -1,11 +1,13 @@
+
 // FIX: This file was missing. Added full implementation for the Dashboard component.
 import React from 'react';
-import type { Transaction, Account, Task, Currency, Budget } from '../types';
-import Card from './ui/Card';
-import TransactionList from './TransactionList';
-import ExpensesChartCard from './ExpensesChartCard';
-import TaskItem from './TaskItem';
-import BudgetsSummaryCard from './BudgetsSummaryCard';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Account, Task, Currency, Budget } from '../types.ts';
+import Card from './ui/Card.tsx';
+import TransactionList from './TransactionList.tsx';
+import ExpensesChartCard from './ExpensesChartCard.tsx';
+import TaskItem from './TaskItem.tsx';
+import BudgetsSummaryCard from './BudgetsSummaryCard.tsx';
 import { ListChecks, ArrowRight } from 'lucide-react';
 
 interface DashboardProps {

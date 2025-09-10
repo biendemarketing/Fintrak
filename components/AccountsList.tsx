@@ -1,10 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
-import type { Account, Currency, Transaction } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
+// FIX: Add file extension to fix module resolution error.
+import type { Account, Currency, Transaction } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Button from './ui/Button.tsx';
 import { Landmark, Trash2, CreditCard, PiggyBank, Briefcase, HandCoins, Pencil, CircleDollarSign } from 'lucide-react';
-import SegmentedControl from './ui/SegmentedControl';
-import CardsView from './CardsView';
+import SegmentedControl from './ui/SegmentedControl.tsx';
+import CardsView from './CardsView.tsx';
 
 interface AccountsListProps {
   accounts: Account[];

@@ -1,5 +1,6 @@
 
-import type { Category, AccountType, RecurringFrequency, CardBrand, ThemeName } from './types';
+// FIX: Add file extension to fix module resolution error.
+import type { Category, AccountType, RecurringFrequency, CardBrand, ThemeName } from './types.ts';
 
 export const CATEGORIES: Category[] = [
     // Income

@@ -1,30 +1,36 @@
-// FIX: This file was missing. Added full implementation for the Avatar component.
+
 import React from 'react';
 
 interface AvatarProps {
   src?: string | null;
   name?: string | null;
-  className?: string;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-const Avatar: React.FC<AvatarProps> = ({ src, name, className = 'w-16 h-16' }) => {
-  const getInitials = (userName?: string): string => {
-    if (!userName) return '';
-    const names = userName.split(' ');
-    if (names.length > 1 && names[0] && names[names.length - 1]) {
+const Avatar: React.FC<AvatarProps> = ({ src, name, size = 'md' }) => {
+  const sizeClasses = {
+    sm: 'w-8 h-8 text-sm',
+    md: 'w-12 h-12 text-lg',
+    lg: 'w-20 h-20 text-2xl',
+  };
+
+  const getInitials = (nameStr?: string | null) => {
+    if (!nameStr) return '?';
+    const names = nameStr.split(' ');
+    if (names.length > 1) {
       return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
     }
-    return userName.substring(0, 2).toUpperCase();
+    return names[0][0].toUpperCase();
   };
 
   return (
-    <div className={`relative inline-flex items-center justify-center overflow-hidden bg-neutral-200 dark:bg-neutral-700 rounded-full ${className}`}>
+    <div className={`relative inline-block ${sizeClasses[size]}`}>
       {src ? (
-        <img className="w-full h-full object-cover" src={src} alt={name || 'User avatar'} />
+        <img src={src} alt={name || 'User Avatar'} className="rounded-full w-full h-full object-cover" />
       ) : (
-        <span className="font-medium text-neutral-600 dark:text-neutral-300">
-          {getInitials(name || undefined)}
-        </span>
+        <div className="rounded-full w-full h-full flex items-center justify-center bg-brand-primary/20 text-brand-primary font-bold">
+          {getInitials(name)}
+        </div>
       )}
     </div>
   );

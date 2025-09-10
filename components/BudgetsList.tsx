@@ -1,8 +1,10 @@
+
 import React, { useMemo } from 'react';
-import type { Budget, Transaction, Currency } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
-import ProgressBar from './ui/ProgressBar';
+// FIX: Add file extension to fix module resolution error.
+import type { Budget, Transaction, Currency } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Button from './ui/Button.tsx';
+import ProgressBar from './ui/ProgressBar.tsx';
 import { Target, Trash2, Pencil } from 'lucide-react';
 
 interface BudgetsListProps {

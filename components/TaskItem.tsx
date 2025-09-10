@@ -1,5 +1,7 @@
+
 import React from 'react';
-import type { Task } from '../types';
+// FIX: Add file extension to fix module resolution error.
+import type { Task } from '../types.ts';
 import { Pencil, Trash2, Receipt } from 'lucide-react';
 
 interface TaskItemProps {

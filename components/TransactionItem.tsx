@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { Trash2, Paperclip, ArrowRightLeft } from 'lucide-react';
-import type { Transaction, Currency, Account } from '../types';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Currency, Account } from '../types.ts';
 
 interface TransactionItemProps {
   transaction: Transaction;

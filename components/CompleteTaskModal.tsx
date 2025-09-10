@@ -1,7 +1,9 @@
+
 import React from 'react';
-import type { Task } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
+// FIX: Add file extension to fix module resolution error.
+import type { Task } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Button from './ui/Button.tsx';
 import { X, CheckCircle } from 'lucide-react';
 
 interface CompleteTaskModalProps {

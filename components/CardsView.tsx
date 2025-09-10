@@ -1,7 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
-import type { Account, Transaction, Currency } from '../types';
-import CardDisplay from './CardDisplay';
-import TransactionItem from './TransactionItem';
+// FIX: Add file extension to fix module resolution error.
+import type { Account, Transaction, Currency } from '../types.ts';
+import CardDisplay from './CardDisplay.tsx';
+import TransactionItem from './TransactionItem.tsx';
 import { Plus, Pause, Play, Settings, ChevronLeft, ChevronRight, List, CreditCard as CreditCardIcon, Trash2, Pencil } from 'lucide-react';
 
 interface CardsViewProps {

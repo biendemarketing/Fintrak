@@ -1,8 +1,10 @@
+
 import React, { useMemo } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
-import type { Transaction } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Button from './ui/Button.tsx';
 import { Calendar } from 'lucide-react';
 
 interface ExpensesChartCardProps {

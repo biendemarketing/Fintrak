@@ -1,7 +1,9 @@
+
 import React from 'react';
-import type { Transaction, Account, Currency } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
+// FIX: Add file extension to fix module resolution error.
+import type { Transaction, Account, Currency } from '../types.ts';
+import Card from './ui/Card.tsx';
+import Button from './ui/Button.tsx';
 import { X, Trash2 } from 'lucide-react';
 
 interface TransactionDetailModalProps {

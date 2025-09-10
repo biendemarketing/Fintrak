@@ -1,4 +1,6 @@
-import type { RecurringFrequency } from '../types';
+
+// FIX: Add file extension to fix module resolution error.
+import type { RecurringFrequency } from '../types.ts';
 
 export const calculateNextDueDate = (startDateStr: string, frequency: RecurringFrequency): string => {
     const today = new Date();
