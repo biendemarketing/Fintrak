@@ -1,28 +1,42 @@
 import React from 'react';
 
 interface AvatarProps {
-  src?: string | null;
-  name?: string;
-  className?: string;
+  name: string;
+  src?: string;
+  size?: 'sm' | 'md' | 'lg';
 }
 
-const getInitials = (name: string = ''): string => {
-  const names = name.split(' ').filter(Boolean);
-  if (names.length === 0) return '?';
-  if (names.length === 1) return names[0].charAt(0).toUpperCase();
-  return `${names[0].charAt(0)}${names[names.length - 1].charAt(0)}`.toUpperCase();
-};
+const Avatar: React.FC<AvatarProps> = ({ name, src, size = 'md' }) => {
+  const getInitials = (nameStr: string) => {
+    if (!nameStr) return '?';
+    const names = nameStr.trim().split(' ');
+    if (names.length === 1) {
+      return names[0].charAt(0).toUpperCase();
+    }
+    return `${names[0].charAt(0)}${names[names.length - 1].charAt(0)}`.toUpperCase();
+  };
 
-const Avatar: React.FC<AvatarProps> = ({ src, name, className = '' }) => {
-  const initials = getInitials(name);
+  const sizeClasses = {
+    sm: 'w-8 h-8 text-sm',
+    md: 'w-12 h-12 text-lg',
+    lg: 'w-20 h-20 text-2xl',
+  };
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        className={`rounded-full object-cover ${sizeClasses[size]}`}
+      />
+    );
+  }
 
   return (
-    <div className={`relative inline-flex items-center justify-center w-16 h-16 overflow-hidden bg-neutral-300 dark:bg-neutral-600 rounded-full ${className}`}>
-      {src ? (
-        <img src={src} alt={name || 'User Avatar'} className="w-full h-full object-cover" />
-      ) : (
-        <span className="font-bold text-xl text-neutral-800 dark:text-white">{initials}</span>
-      )}
+    <div
+      className={`flex items-center justify-center rounded-full bg-brand-primary/20 text-brand-primary font-bold ${sizeClasses[size]}`}
+    >
+      <span>{getInitials(name)}</span>
     </div>
   );
 };

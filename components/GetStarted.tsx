@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import Slide1Icon from './icons/Slide1Icon';
-import Slide2Icon from './icons/Slide2Icon';
-import Slide3Icon from './icons/Slide3Icon';
-import Button from './ui/Button';
+// FIX: Add file extension to fix module resolution error.
+import Slide1Icon from './icons/Slide1Icon.tsx';
+// FIX: Add file extension to fix module resolution error.
+import Slide2Icon from './icons/Slide2Icon.tsx';
+// FIX: Add file extension to fix module resolution error.
+import Slide3Icon from './icons/Slide3Icon.tsx';
+// FIX: Add file extension to fix module resolution error.
+import Button from './ui/Button.tsx';
 
 interface GetStartedProps {
   onNavigateToAuth: (initialView: 'signIn' | 'signUp') => void;

@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
-import Button from './ui/Button';
-import Input from './ui/Input';
-import GoogleIcon from './icons/GoogleIcon';
-import PasswordRequirements from './PasswordRequirements';
-import ArrowLeftIcon from './icons/ArrowLeftIcon';
+// FIX: Add file extension to fix module resolution error.
+import { supabase } from '../lib/supabase.ts';
+// FIX: Add file extension to fix module resolution error.
+import Button from './ui/Button.tsx';
+// FIX: Add file extension to fix module resolution error.
+import Input from './ui/Input.tsx';
+// FIX: Add file extension to fix module resolution error.
+import GoogleIcon from './icons/GoogleIcon.tsx';
+// FIX: Add file extension to fix module resolution error.
+import PasswordRequirements from './PasswordRequirements.tsx';
+// FIX: Add file extension to fix module resolution error.
+import ArrowLeftIcon from './icons/ArrowLeftIcon.tsx';
 import { Wallet } from 'lucide-react';
 
 interface AuthProps {
