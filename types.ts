@@ -63,13 +63,23 @@ export interface RecurringTransaction {
     nextDueDate: string; // YYYY-MM-DD
 }
 
+export interface Budget {
+    id: string;
+    user_id: string;
+    category: string;
+    amount: number;
+    period: 'Mensual'; // For now, only monthly budgets
+    created_at: string;
+}
+
 export type View = 
     'dashboard' | 
     'calendar' | 
     'accounts' | 
     'recurring' | 
     'notifications' |
-    'tasks';
+    'tasks' |
+    'budgets';
 
 export type ThemeName = 'default' | 'forest' | 'sunset' | 'ocean';
 

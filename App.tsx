@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from './lib/supabase';
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
-import type { Transaction, Account, View, UserSettings, RecurringTransaction, Task } from './types';
+import type { Transaction, Account, View, UserSettings, RecurringTransaction, Task, Budget } from './types';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import BottomNavBar from './components/BottomNavBar';
@@ -25,6 +25,8 @@ import TasksList from './components/TasksList';
 import AddTaskForm from './components/AddTaskForm';
 import FijosMenuModal from './components/FijosMenuModal';
 import CompleteTaskModal from './components/CompleteTaskModal';
+import BudgetsList from './components/BudgetsList';
+import AddBudgetForm from './components/AddBudgetForm';
 
 // A helper function for handling Supabase responses.
 // FIX: Changed `Promise` to `PromiseLike` to accommodate Supabase's thenable query builders.
@@ -49,16 +51,17 @@ const App: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   
   // UI State
   const [view, setView] = useState<View>('dashboard');
-  const [modal, setModal] = useState<'transaction' | 'account' | 'transfer' | 'recurring' | 'task' | null>(null);
+  const [modal, setModal] = useState<'transaction' | 'account' | 'transfer' | 'recurring' | 'task' | 'budget' | null>(null);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [isSearchOpen, setSearchOpen] = useState(false);
   const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const [isFijosMenuOpen, setFijosMenuOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [itemToEdit, setItemToEdit] = useState<Transaction | Account | RecurringTransaction | Task | null>(null);
+  const [itemToEdit, setItemToEdit] = useState<Transaction | Account | RecurringTransaction | Task | Budget | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [prefillData, setPrefillData] = useState<any>(null);
   const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
@@ -100,12 +103,13 @@ const App: React.FC = () => {
   
   // Fetch all user data
   const fetchData = async (currentUser: User) => {
-    const [accountsData, transactionsData, recurringData, tasksData, settingsData] = await Promise.all([
+    const [accountsData, transactionsData, recurringData, tasksData, settingsData, budgetsData] = await Promise.all([
       handleSupabaseResponse(supabase.from('accounts').select('*').eq('user_id', currentUser.id)),
       handleSupabaseResponse(supabase.from('transactions').select('*').eq('user_id', currentUser.id).order('date', { ascending: false }).order('time', { ascending: false, nullsFirst: true })),
       handleSupabaseResponse(supabase.from('recurring_transactions').select('*').eq('user_id', currentUser.id)),
       handleSupabaseResponse(supabase.from('tasks').select('*').eq('user_id', currentUser.id)),
       handleSupabaseResponse(supabase.from('profiles').select('*').eq('id', currentUser.id).single()),
+      handleSupabaseResponse(supabase.from('budgets').select('*').eq('user_id', currentUser.id)),
     ]);
     
     if (accountsData) setAccounts(accountsData);
@@ -113,6 +117,7 @@ const App: React.FC = () => {
     if (recurringData) setRecurringTransactions(recurringData);
     if (tasksData) setTasks(tasksData);
     if (settingsData) setSettings(settingsData);
+    if (budgetsData) setBudgets(budgetsData);
   };
 
   useEffect(() => {
@@ -151,7 +156,7 @@ const App: React.FC = () => {
     setPrefillData(null);
   };
   
-  const openModal = (type: 'transaction' | 'account' | 'transfer' | 'recurring' | 'task', item?: any) => {
+  const openModal = (type: 'transaction' | 'account' | 'transfer' | 'recurring' | 'task' | 'budget', item?: any) => {
     setItemToEdit(item || null);
     setModal(type);
   };
@@ -230,7 +235,7 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (view) {
       case 'dashboard':
-        return <Dashboard transactions={transactions} accounts={accounts} tasks={tasks} accountBalances={accountBalances} onDeleteTransaction={(id) => handleDelete('transactions', id)} onSelectTransaction={setSelectedTransaction} onViewCalendar={() => setView('calendar')} onViewTasks={() => setView('tasks')} onToggleTaskCompletion={handleToggleTaskCompletion}/>;
+        return <Dashboard transactions={transactions} accounts={accounts} tasks={tasks} budgets={budgets} accountBalances={accountBalances} onDeleteTransaction={(id) => handleDelete('transactions', id)} onSelectTransaction={setSelectedTransaction} onViewCalendar={() => setView('calendar')} onViewTasks={() => setView('tasks')} onToggleTaskCompletion={handleToggleTaskCompletion} onViewBudgets={() => setView('budgets')} />;
       case 'calendar':
         return <CalendarView transactions={transactions} accounts={accounts} onSelectTransaction={setSelectedTransaction} onDeleteTransaction={(id) => handleDelete('transactions', id)}/>
       case 'accounts':
@@ -239,6 +244,8 @@ const App: React.FC = () => {
         return <RecurringTransactionList recurringTransactions={recurringTransactions} accounts={accounts} onDelete={(id) => handleDelete('recurring_transactions', id)} onEdit={(rt) => openModal('recurring', rt)} onAdd={() => openModal('recurring')}/>
       case 'tasks':
         return <TasksList tasks={tasks} onToggleCompletion={handleToggleTaskCompletion} onDeleteTask={(id) => handleDelete('tasks', id)} onEditTask={(task) => openModal('task', task)} onAddTask={() => openModal('task')}/>
+      case 'budgets':
+        return <BudgetsList budgets={budgets} transactions={transactions} onAddBudget={() => openModal('budget')} onEditBudget={(b) => openModal('budget', b)} onDeleteBudget={(id) => handleDelete('budgets', id)} />;
       case 'notifications':
         return <NotificationsList />;
       default: return null;
@@ -280,6 +287,7 @@ const App: React.FC = () => {
       {modal === 'transfer' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddTransferForm onAddTransfer={(t) => handleAddOrUpdate('transactions', {...t, type: 'transfer', description: 'Transferencia', category: 'Transferencia'})} accounts={accounts} defaultCurrency={settings.defaultCurrency} prefillData={prefillData}/></div></div>}
       {modal === 'recurring' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddRecurringTransactionForm onAddRecurring={(rt) => handleAddOrUpdate('recurring_transactions', rt)} onUpdateRecurring={(rt) => handleAddOrUpdate('recurring_transactions', rt, rt.id)} recurringTransactionToEdit={itemToEdit as RecurringTransaction | null} accounts={accounts} defaultCurrency={settings.defaultCurrency}/></div></div>}
       {modal === 'task' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddTaskForm onAddTask={handleAddOrUpdateTask} onUpdateTask={(t) => handleAddOrUpdate('tasks', t, t.id)} taskToEdit={itemToEdit as Task | null} accounts={accounts} defaultCurrency={settings.defaultCurrency}/></div></div>}
+      {modal === 'budget' && <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={closeModal}><div onClick={(e) => e.stopPropagation()}><AddBudgetForm onAddBudget={(b) => handleAddOrUpdate('budgets', b)} onUpdateBudget={(b) => handleAddOrUpdate('budgets', b, b.id)} budgetToEdit={itemToEdit as Budget | null} existingBudgets={budgets} /></div></div>}
       {isSettingsOpen && <SettingsPanel user={user} settings={settings} onUpdateSettings={handleUpdateSettings} onClose={() => setSettingsOpen(false)} />}
       {selectedTransaction && <TransactionDetailModal transaction={selectedTransaction} accounts={accounts} onClose={() => setSelectedTransaction(null)} onDelete={(id) => handleDelete('transactions', id)}/>}
       {isSearchOpen && <SearchModal isOpen={isSearchOpen} onClose={() => setSearchOpen(false)} transactions={transactions} accounts={accounts} onSelectTransaction={(t) => { setSearchOpen(false); setSelectedTransaction(t); }}/>}

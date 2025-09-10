@@ -1,21 +1,24 @@
 // FIX: This file was missing. Added full implementation for the Dashboard component.
 import React from 'react';
-import type { Transaction, Account, Task, Currency } from '../types';
+import type { Transaction, Account, Task, Currency, Budget } from '../types';
 import Card from './ui/Card';
 import TransactionList from './TransactionList';
 import ExpensesChartCard from './ExpensesChartCard';
 import TaskItem from './TaskItem';
+import BudgetsSummaryCard from './BudgetsSummaryCard';
 import { ListChecks, ArrowRight } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
   accounts: Account[];
   tasks: Task[];
+  budgets: Budget[];
   accountBalances: { [key: string]: { balanceDOP: number; balanceUSD: number } };
   onDeleteTransaction: (id: string) => void;
   onSelectTransaction: (transaction: Transaction) => void;
   onViewCalendar: () => void;
   onViewTasks: () => void;
+  onViewBudgets: () => void;
   onToggleTaskCompletion: (task: Task) => void;
 }
 
@@ -42,11 +45,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   transactions,
   accounts,
   tasks,
+  budgets,
   accountBalances,
   onDeleteTransaction,
   onSelectTransaction,
   onViewCalendar,
   onViewTasks,
+  onViewBudgets,
   onToggleTaskCompletion,
 }) => {
   const recentTransactions = transactions.slice(0, 5);
@@ -55,6 +60,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="space-y-6">
       <BalanceCard accountBalances={accountBalances} />
+      
+      {budgets.length > 0 && (
+        <BudgetsSummaryCard budgets={budgets} transactions={transactions} onViewBudgets={onViewBudgets} />
+      )}
       
       <ExpensesChartCard transactions={transactions} onViewCalendar={onViewCalendar} />
       

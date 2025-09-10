@@ -1,6 +1,6 @@
 import React from 'react';
 import Card from './ui/Card';
-import { ListChecks, Repeat, X } from 'lucide-react';
+import { ListChecks, Repeat, X, Target } from 'lucide-react';
 import type { View } from '../types';
 
 interface FijosMenuModalProps {
@@ -48,6 +48,12 @@ const FijosMenuModal: React.FC<FijosMenuModalProps> = ({ onClose, setView }) => 
                     </button>
                 </div>
                 <div className="space-y-3">
+                    <ActionButton 
+                        icon={Target} 
+                        title="Presupuestos" 
+                        description="Define y sigue tus límites de gasto."
+                        onClick={() => handleSelect('budgets')}
+                    />
                     <ActionButton 
                         icon={ListChecks} 
                         title="Tareas y Recordatorios" 
