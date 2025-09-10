@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LayoutDashboard, Plus, Landmark, ArrowRightLeft, CircleDollarSign } from 'lucide-react';
 // FIX: Add file extension to fix module resolution error.
@@ -29,7 +28,7 @@ const NavButton: React.FC<{
 
 const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeView, setView, openAddMenu, openFijosMenu }) => {
     return (
-        <footer className="fixed bottom-0 left-0 right-0 h-16 bg-white/80 dark:bg-neutral-800/80 backdrop-blur-lg border-t border-neutral-200 dark:border-neutral-700 z-30">
+        <footer className="fixed bottom-4 left-4 right-4 h-16 bg-white/80 dark:bg-neutral-800/80 backdrop-blur-lg rounded-2xl shadow-2xl z-30 border border-neutral-200 dark:border-neutral-700/50">
             <div className="container mx-auto h-full grid grid-cols-5 items-center justify-center">
                 <NavButton
                     onClick={() => setView('dashboard')}
