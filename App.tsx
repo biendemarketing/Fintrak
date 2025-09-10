@@ -1,271 +1,529 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Session, User } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
-import type { Session, User } from '@supabase/supabase-js';
-import type { Transaction, Account, RecurringTransaction, Task, View, Profile, Budget, ThemeName, Currency } from './types.ts';
+// FIX: Add file extension to fix module resolution error.
+import type { View, Transaction, Account, RecurringTransaction, Task, Budget, AppSettings, UserProfile } from './types.ts';
+import { calculateNextDueDate } from './utils/date.ts';
+import { resizeImage } from './utils/image.ts';
 
-// Components
+// Component Imports
 import Header from './components/Header.tsx';
-import Dashboard from './components/Dashboard.tsx';
-import AccountsList from './components/AccountsList.tsx';
 import BottomNavBar from './components/BottomNavBar.tsx';
-import AddTransactionForm from './components/AddTransactionForm.tsx';
-import AddAccountForm from './components/AddAccountForm.tsx';
-import TransactionDetailModal from './components/TransactionDetailModal.tsx';
-import AddMenuModal from './components/AddMenuModal.tsx';
-import AddTransferForm from './components/AddTransferForm.tsx';
+import Dashboard from './components/Dashboard.tsx';
+import CalendarView from './components/CalendarView.tsx';
+import AccountsList from './components/AccountsList.tsx';
 import RecurringTransactionList from './components/RecurringTransactionList.tsx';
+import TasksList from './components/TasksList.tsx';
+import BudgetsList from './components/BudgetsList.tsx';
+import NotificationsList from './components/NotificationsList.tsx';
+
+// Modal and Form Imports
+import AddMenuModal from './components/AddMenuModal.tsx';
+import FijosMenuModal from './components/FijosMenuModal.tsx';
+import AddTransactionForm from './components/AddTransactionForm.tsx';
+import AddTransferForm from './components/AddTransferForm.tsx';
 import AddRecurringTransactionForm from './components/AddRecurringTransactionForm.tsx';
+import AddTaskForm from './components/AddTaskForm.tsx';
+import AddAccountForm from './components/AddAccountForm.tsx';
+import AddBudgetForm from './components/AddBudgetForm.tsx';
+import TransactionDetailModal from './components/TransactionDetailModal.tsx';
 import SettingsPanel from './components/SettingsPanel.tsx';
 import PinLockScreen from './components/PinLockScreen.tsx';
-import PinSetupModal from './components/PinSetupModal.tsx';
 import SearchModal from './components/SearchModal.tsx';
-import NotificationsList from './components/NotificationsList.tsx';
-import CalendarView from './components/CalendarView.tsx';
-import TasksList from './components/TasksList.tsx';
-import AddTaskForm from './components/AddTaskForm.tsx';
-import FijosMenuModal from './components/FijosMenuModal.tsx';
-import CompleteTaskModal from './components/CompleteTaskModal.tsx';
-import Auth from './components/Auth.tsx';
 import GetStarted from './components/GetStarted.tsx';
-import BudgetsList from './components/BudgetsList.tsx';
-import AddBudgetForm from './components/AddBudgetForm.tsx';
-
-// Utils
-import { resizeImage } from './utils/image.ts';
-import { calculateNextDueDate } from './utils/date.ts';
-
-// Example Data for first-time users
-import { exampleAccounts, exampleTransactions, exampleRecurringTransactions, exampleTasks } from './data/exampleData.ts';
-
-// A simple in-memory cache to avoid re-calculating balances on every render
-const balanceCache = new Map<string, any>();
+import Auth from './components/Auth.tsx';
+import CompleteTaskModal from './components/CompleteTaskModal.tsx';
 
 const App: React.FC = () => {
-    // Auth & Profile State
-    const [session, setSession] = useState<Session | null>(null);
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const [loading, setLoading] = useState(true);
+  // Auth state
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [authView, setAuthView] = useState<'getStarted' | 'signIn' | 'signUp' | null>('getStarted');
+  const [isUnlocked, setUnlocked] = useState(false);
 
-    // Main Data State
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [accounts, setAccounts] = useState<Account[]>([]);
-    const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [budgets, setBudgets] = useState<Budget[]>([]);
+  // UI State
+  const [view, setView] = useState<View>('dashboard');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const [isSearchOpen, setSearchOpen] = useState(false);
+  
+  // Data State
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [recurringTransactions, setRecurringTransactions] = useState<RecurringTransaction[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [settings, setSettings] = useState<AppSettings>({
+    theme: 'default',
+    defaultCurrency: 'DOP',
+    pinLock: null,
+    notifications: { paymentReminders: true, budgetAlerts: true, newFeatures: false },
+  });
+
+  // Modal/Form State
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [entityToEdit, setEntityToEdit] = useState<any | null>(null);
+  const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
+  const [transferPrefill, setTransferPrefill] = useState<{ toAccountId: string } | null>(null);
+
+  // Auth effect
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (!session) {
+            setAuthView('getStarted');
+            setIsLoading(false);
+        }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (!session) {
+        setAuthView('getStarted');
+        setUnlocked(false);
+        // Clear all data on logout
+        setTransactions([]);
+        setAccounts([]);
+        setRecurringTransactions([]);
+        setTasks([]);
+        setBudgets([]);
+        setUserProfile(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Data fetching effect
+  useEffect(() => {
+    if (user) {
+      setAuthView(null);
+      fetchInitialData();
+    }
+  }, [user]);
+
+  const fetchInitialData = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const [
+        transactionsRes,
+        accountsRes,
+        recurringRes,
+        tasksRes,
+        budgetsRes,
+        profileRes,
+        settingsRes,
+      ] = await Promise.all([
+        supabase.from('transactions').select('*').order('date', { ascending: false }),
+        supabase.from('accounts').select('*').order('name'),
+        supabase.from('recurring_transactions').select('*'),
+        supabase.from('tasks').select('*'),
+        supabase.from('budgets').select('*'),
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
+        supabase.from('settings').select('*').eq('user_id', user.id).single(),
+      ]);
+
+      if (transactionsRes.error) throw transactionsRes.error;
+      setTransactions(transactionsRes.data as Transaction[]);
+
+      if (accountsRes.error) throw accountsRes.error;
+      setAccounts(accountsRes.data as Account[]);
+
+      if (recurringRes.error) throw recurringRes.error;
+      setRecurringTransactions(recurringRes.data as RecurringTransaction[]);
+      
+      if (tasksRes.error) throw tasksRes.error;
+      setTasks(tasksRes.data as Task[]);
+
+      if (budgetsRes.error) throw budgetsRes.error;
+      setBudgets(budgetsRes.data as Budget[]);
+
+      if (profileRes.error) throw profileRes.error;
+      setUserProfile(profileRes.data as UserProfile);
+      
+      if (settingsRes.data) {
+        setSettings(settingsRes.data.settings_data as AppSettings);
+      } else {
+        const { data: newSettingsData, error: newSettingsError } = await supabase.from('settings').insert({ user_id: user.id, settings_data: settings }).select().single();
+        if (newSettingsError) throw newSettingsError;
+        if (newSettingsData) setSettings(newSettingsData.settings_data as AppSettings);
+      }
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const accountBalances = useMemo(() => {
+    const balances: { [key: string]: { balanceDOP: number; balanceUSD: number } } = {};
+    accounts.forEach(acc => {
+      balances[acc.id] = { balanceDOP: 0, balanceUSD: 0 };
+    });
     
-    // UI & Navigation State
-    const [view, setView] = useState<View>('dashboard');
-    const [activeModal, setActiveModal] = useState<string | null>(null);
-    const [isSearchOpen, setSearchOpen] = useState(false);
-    
-    // State for Modals and Forms
-    const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
-    const [accountToEdit, setAccountToEdit] = useState<Account | null>(null);
-    const [recurringToEdit, setRecurringToEdit] = useState<RecurringTransaction | null>(null);
-    const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
-    const [budgetToEdit, setBudgetToEdit] = useState<Budget | null>(null);
-    const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-    const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
-    const [transferPrefill, setTransferPrefill] = useState<{ toAccountId: string } | null>(null);
+    transactions.forEach(t => {
+      const balance = balances[t.accountId];
+      if (!balance) return;
 
-    // App Settings
-    const [theme, setTheme] = useState<ThemeName>(() => (localStorage.getItem('theme') as ThemeName) || 'default');
-    const [pin, setPin] = useState<string | null>(localStorage.getItem('app_pin'));
-    const [isPinEnabled, setPinEnabled] = useState<boolean>(!!localStorage.getItem('app_pin'));
-    const [isAppLocked, setAppLocked] = useState(!!localStorage.getItem('app_pin'));
-    const [showGetStarted, setShowGetStarted] = useState(() => !localStorage.getItem('has_seen_get_started'));
-
-    // Authentication and data fetching effects
-    useEffect(() => {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-            if (!session) {
-                // Clear all data on logout
-                setTransactions([]);
-                setAccounts([]);
-                setRecurringTransactions([]);
-                setTasks([]);
-                setBudgets([]);
-                setProfile(null);
-                balanceCache.clear();
+      const currencyKey = t.currency === 'DOP' ? 'balanceDOP' : 'balanceUSD';
+      
+      if (t.type === 'income') {
+        balance[currencyKey] += t.amount;
+      } else if (t.type === 'expense') {
+        balance[currencyKey] -= t.amount;
+      } else if (t.type === 'transfer') {
+        balance[currencyKey] -= t.amount;
+        if (t.transferToAccountId) {
+            const toBalance = balances[t.transferToAccountId];
+            if (toBalance) {
+              toBalance[currencyKey] += t.amount;
             }
-        });
-        return () => subscription.unsubscribe();
-    }, []);
+        }
+      }
+    });
+    return balances;
+  }, [transactions, accounts]);
 
-    const fetchData = useCallback(async (user: User) => {
-        setLoading(true);
+  const closeModal = () => {
+      setActiveModal(null);
+      setEntityToEdit(null);
+      setTransferPrefill(null);
+  };
+  
+    const uploadReceipt = async (file: File): Promise<string | undefined> => {
+        if (!user) return undefined;
         try {
-            const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-            if (profileError) throw profileError;
-            setProfile(profileData);
+            const resizedImage = await resizeImage(file, 800);
+            const blob = await (await fetch(resizedImage)).blob();
+            const filePath = `${user.id}/${new Date().getTime()}-${file.name}`;
+            const { data, error } = await supabase.storage.from('receipts').upload(filePath, blob, {
+                contentType: 'image/jpeg',
+                upsert: false
+            });
+            if (error) throw error;
+            const { data: { publicUrl } } = supabase.storage.from('receipts').getPublicUrl(data.path);
+            return publicUrl;
+        } catch (error) {
+            console.error("Error uploading receipt:", error);
+            alert('Hubo un error al subir la imagen.');
+            return undefined;
+        }
+    };
 
-            const dataFetches = [
-                supabase.from('accounts').select('*'),
-                supabase.from('transactions').select('*').order('date', { ascending: false }),
-                supabase.from('recurring_transactions').select('*'),
-                supabase.from('tasks').select('*'),
-                supabase.from('budgets').select('*'),
-            ];
+    const handleAddTransaction = async (transaction: Omit<Transaction, 'id' | 'user_id' | 'transferToAccountId'>, receiptFile?: File) => {
+        if (!user) return;
+        let receiptImageUrl: string | undefined;
+        if (receiptFile) {
+            receiptImageUrl = await uploadReceipt(receiptFile);
+        }
 
-            const [accountsRes, transactionsRes, recurringRes, tasksRes, budgetsRes] = await Promise.all(dataFetches);
+        const { data, error } = await supabase
+            .from('transactions')
+            .insert({ ...transaction, user_id: user.id, receiptImage: receiptImageUrl })
+            .select()
+            .single();
+        if (error) {
+            console.error(error);
+            alert('Error al agregar movimiento.');
+        } else if (data) {
+            setTransactions(prev => [data as Transaction, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            closeModal();
+        }
+    };
 
-            if (accountsRes.error || transactionsRes.error || recurringRes.error || tasksRes.error || budgetsRes.error) {
-                console.error("Error fetching data:", accountsRes.error || transactionsRes.error || recurringRes.error || tasksRes.error || budgetsRes.error);
+    const handleUpdateTransaction = async (transaction: Partial<Transaction> & { id: string }, receiptFile?: File) => {
+        let receiptImageUrl: string | undefined = transaction.receiptImage;
+        if (receiptFile) {
+            receiptImageUrl = await uploadReceipt(receiptFile);
+        }
+        const { data, error } = await supabase.from('transactions').update({ ...transaction, receiptImage: receiptImageUrl }).eq('id', transaction.id).select().single();
+        if (error) {
+            alert('Error al actualizar movimiento.');
+        } else if (data) {
+            setTransactions(prev => prev.map(t => t.id === data.id ? data as Transaction : t));
+            closeModal();
+        }
+    };
+
+    const handleDeleteTransaction = async (id: string) => {
+        if (!window.confirm('¿Estás seguro de que quieres eliminar este movimiento?')) return;
+        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (error) {
+            alert('Error al eliminar movimiento.');
+        } else {
+            setTransactions(prev => prev.filter(t => t.id !== id));
+            setSelectedTransaction(null);
+        }
+    };
+    
+    const handleAddAccount = async (account: Omit<Account, 'id' | 'user_id'>) => {
+        if (!user) return;
+        const { data, error } = await supabase.from('accounts').insert({ ...account, user_id: user.id }).select().single();
+        if (error) alert('Error al agregar cuenta.');
+        else if (data) {
+            setAccounts(prev => [...prev, data as Account]);
+            closeModal();
+        }
+    };
+    
+    const handleUpdateAccount = async (account: Partial<Account> & { id: string }) => {
+        const { data, error } = await supabase.from('accounts').update(account).eq('id', account.id).select().single();
+        if (error) alert('Error al actualizar cuenta.');
+        else if (data) {
+            setAccounts(prev => prev.map(a => a.id === data.id ? data as Account : a));
+            closeModal();
+        }
+    };
+    
+    const handleDeleteAccount = async (id: string) => {
+        const associatedTransactions = transactions.filter(t => t.accountId === id || t.transferToAccountId === id);
+        if (associatedTransactions.length > 0) {
+            alert('No se puede eliminar la cuenta porque tiene movimientos asociados. Por favor, elimínalos primero.');
+            return;
+        }
+        if (!window.confirm('¿Estás seguro de que quieres eliminar esta cuenta?')) return;
+        const { error } = await supabase.from('accounts').delete().eq('id', id);
+        if (error) alert('Error al eliminar cuenta.');
+        else setAccounts(prev => prev.filter(a => a.id !== id));
+    };
+    
+    const handleAddTransfer = async (transfer: Omit<Transaction, 'id' | 'user_id' | 'type' | 'category' | 'description'>) => {
+        if (!user) return;
+        const transferData = {
+            ...transfer,
+            user_id: user.id,
+            type: 'transfer' as const,
+            category: 'Transferencia',
+            description: 'Transferencia entre cuentas'
+        };
+        const { data, error } = await supabase.from('transactions').insert(transferData).select().single();
+        if (error) alert('Error al realizar transferencia.');
+        else if (data) {
+            setTransactions(prev => [data as Transaction, ...prev]);
+            closeModal();
+        }
+    };
+
+    const handleAddRecurring = async (rec: Omit<RecurringTransaction, 'id' | 'user_id' | 'nextDueDate'>) => {
+        if (!user) return;
+        const nextDueDate = calculateNextDueDate(rec.startDate, rec.frequency);
+        const { data, error } = await supabase.from('recurring_transactions').insert({ ...rec, user_id: user.id, nextDueDate }).select().single();
+        if (error) alert('Error al agregar gasto fijo.');
+        else if (data) {
+            setRecurringTransactions(prev => [...prev, data as RecurringTransaction]);
+            closeModal();
+        }
+    };
+    
+    const handleUpdateRecurring = async (rec: Partial<RecurringTransaction> & { id: string }) => {
+        let payload: any = { ...rec };
+        if (rec.startDate && rec.frequency) {
+            payload.nextDueDate = calculateNextDueDate(rec.startDate, rec.frequency);
+        }
+        const { data, error } = await supabase.from('recurring_transactions').update(payload).eq('id', rec.id).select().single();
+        if (error) alert('Error al actualizar gasto fijo.');
+        else if (data) {
+            setRecurringTransactions(prev => prev.map(r => r.id === data.id ? data as RecurringTransaction : r));
+            closeModal();
+        }
+    };
+    
+    const handleDeleteRecurring = async (id: string) => {
+        if (!window.confirm('¿Eliminar este gasto/ingreso fijo?')) return;
+        const { error } = await supabase.from('recurring_transactions').delete().eq('id', id);
+        if (error) alert('Error al eliminar.');
+        else setRecurringTransactions(prev => prev.filter(r => r.id !== id));
+    };
+
+    const handleAddTask = async (taskData: Omit<Task, 'id' | 'user_id' | 'isCompleted' | 'transactionId' | 'createdAt' | 'completedAt'>, transactionData?: Omit<Transaction, 'id' | 'user_id' | 'description'>) => {
+        if (!user) return;
+
+        let transactionId: string | undefined = undefined;
+
+        if (transactionData) {
+            const { data: tData, error: tError } = await supabase
+                .from('transactions')
+                .insert({ ...transactionData, user_id: user.id, description: taskData.title })
+                .select()
+                .single();
+            if (tError) {
+                alert('Error al crear el movimiento asociado a la tarea.');
                 return;
             }
-
-            setAccounts(accountsRes.data || []);
-            setTransactions(transactionsRes.data || []);
-            setRecurringTransactions(recurringRes.data || []);
-            setTasks(tasksRes.data || []);
-            setBudgets(budgetsRes.data || []);
-            
-            // Check if user is new (has a profile but no accounts)
-            if (profileData && (accountsRes.data || []).length === 0) {
-                await seedInitialData(user);
+            if (tData) {
+                transactionId = tData.id;
+                setTransactions(prev => [tData as Transaction, ...prev]);
             }
-
-        } catch (error: any) {
-            console.error("Error in data fetch process:", error.message);
-        } finally {
-            setLoading(false);
         }
-    }, []);
 
-    useEffect(() => {
-        if (session?.user) {
-            fetchData(session.user);
-        } else {
-            setLoading(false);
+        const taskPayload = { ...taskData, user_id: user.id, isCompleted: false, transactionId: transactionId };
+        const { data, error } = await supabase.from('tasks').insert(taskPayload).select().single();
+        if (error) alert('Error al crear tarea.');
+        else if (data) {
+            setTasks(prev => [...prev, data as Task]);
+            closeModal();
         }
-    }, [session, fetchData]);
-
-    // Apply theme to HTML element
-    useEffect(() => {
-        document.documentElement.className = ''; // Clear existing theme classes
-        const selectedTheme = COLOR_THEMES.find(t => t.name === theme);
-        if (selectedTheme) {
-            document.documentElement.style.setProperty('--color-brand-primary', selectedTheme.primary);
-            document.documentElement.style.setProperty('--color-brand-secondary', selectedTheme.secondary);
-        }
-        localStorage.setItem('theme', theme);
-    }, [theme]);
-    
-    const seedInitialData = async (user: User) => {
-        // ... (implementation for seeding data)
     };
 
-    const handleNavigateToAuth = (initialView: 'signIn' | 'signUp') => {
-        setShowGetStarted(false);
-        setView('auth');
-        localStorage.setItem('has_seen_get_started', 'true');
+    const handleUpdateTask = async (task: Partial<Task> & { id: string }) => {
+        const { data, error } = await supabase.from('tasks').update(task).eq('id', task.id).select().single();
+        if (error) alert('Error al actualizar tarea.');
+        else if (data) {
+            setTasks(prev => prev.map(t => t.id === data.id ? data as Task : t));
+            closeModal();
+        }
     };
 
-    // CRUD Handlers will go here (omitted for brevity but would include all Supabase interactions)
-
-    // Calculate account balances with memoization
-    const accountBalances = useMemo(() => {
-        const balances: { [key: string]: { balanceDOP: number; balanceUSD: number } } = {};
-        const transactionsKey = transactions.map(t => t.id + t.amount).join(',');
+    const handleToggleTaskCompletion = async (task: Task) => {
+        if (!task.isCompleted && task.transactionId && !transactions.find(t => t.id === task.transactionId)) {
+            setTaskToComplete(task);
+            return; 
+        }
         
-        if (balanceCache.has(transactionsKey)) {
-            return balanceCache.get(transactionsKey);
-        }
-
-        accounts.forEach(acc => {
-            balances[acc.id] = { balanceDOP: 0, balanceUSD: 0 };
-        });
-
-        [...transactions].reverse().forEach(t => {
-            if (t.type === 'income') {
-                if(balances[t.accountId]) balances[t.accountId][t.currency === 'DOP' ? 'balanceDOP' : 'balanceUSD'] += t.amount;
-            } else if (t.type === 'expense') {
-                if(balances[t.accountId]) balances[t.accountId][t.currency === 'DOP' ? 'balanceDOP' : 'balanceUSD'] -= t.amount;
-            } else if (t.type === 'transfer' && t.transferToAccountId) {
-                if(balances[t.accountId]) balances[t.accountId][t.currency === 'DOP' ? 'balanceDOP' : 'balanceUSD'] -= t.amount;
-                if(balances[t.transferToAccountId]) balances[t.transferToAccountId][t.currency === 'DOP' ? 'balanceDOP' : 'balanceUSD'] += t.amount;
-            }
-        });
+        const isCompleted = !task.isCompleted;
+        const completedAt = isCompleted ? new Date().toISOString() : null;
         
-        balanceCache.set(transactionsKey, balances);
-        return balances;
-    }, [accounts, transactions]);
-    
-    // Render logic
-    if (loading) {
-        return <div className="fixed inset-0 bg-neutral-900 flex items-center justify-center text-white">Cargando...</div>;
-    }
-    
-    if (showGetStarted) {
-        return <GetStarted onNavigateToAuth={handleNavigateToAuth} />;
-    }
+        const { data, error } = await supabase.from('tasks').update({ isCompleted, completedAt }).eq('id', task.id).select().single();
+        if (error) alert('Error al actualizar estado de la tarea.');
+        else if (data) {
+            setTasks(prev => prev.map(t => t.id === data.id ? data as Task : t));
+        }
+    };
 
-    if (!session) {
-        return <Auth />;
-    }
+    const handleDeleteTask = async (id: string) => {
+        if (!window.confirm('¿Eliminar esta tarea?')) return;
+        const { error } = await supabase.from('tasks').delete().eq('id', id);
+        if (error) alert('Error al eliminar tarea.');
+        else setTasks(prev => prev.filter(t => t.id !== id));
+    };
     
-    if (isPinEnabled && isAppLocked) {
-        return <PinLockScreen correctPin={pin!} onUnlock={() => setAppLocked(false)} />;
-    }
-
-    const renderView = () => {
-        switch(view) {
-            case 'dashboard': return <Dashboard transactions={transactions} accounts={accounts} tasks={tasks} budgets={budgets} accountBalances={accountBalances} onDeleteTransaction={()=>{}} onSelectTransaction={setSelectedTransaction} onViewCalendar={() => setView('calendar')} onViewTasks={() => setView('tasks')} onViewBudgets={() => setView('budgets')} onToggleTaskCompletion={()=>{}} />;
-            case 'calendar': return <CalendarView transactions={transactions} accounts={accounts} onSelectTransaction={setSelectedTransaction} onDeleteTransaction={()=>{}} />;
-            case 'accounts': return <AccountsList accounts={accounts} transactions={transactions} accountBalances={accountBalances} onAddAccount={() => setActiveModal('addAccount')} onDeleteAccount={()=>{}} onEditAccount={acc => { setAccountToEdit(acc); setActiveModal('addAccount');}} onUpdateAccount={()=>{}} onSelectTransaction={setSelectedTransaction} onAddMoneyToCard={card => { setTransferPrefill({ toAccountId: card.id }); setActiveModal('addTransfer'); }}/>;
-            case 'tasks': return <TasksList tasks={tasks} onToggleCompletion={()=>{}} onDeleteTask={()=>{}} onEditTask={task => { setTaskToEdit(task); setActiveModal('addTask'); }} onAddTask={() => setActiveModal('addTask')} />;
-            case 'recurring': return <RecurringTransactionList recurringTransactions={recurringTransactions} accounts={accounts} onDelete={()=>{}} onEdit={rt => { setRecurringToEdit(rt); setActiveModal('addRecurring'); }} onAdd={() => setActiveModal('addRecurring')} />;
-            case 'budgets': return <BudgetsList budgets={budgets} transactions={transactions} onAddBudget={() => setActiveModal('addBudget')} onEditBudget={b => { setBudgetToEdit(b); setActiveModal('addBudget'); }} onDeleteBudget={()=>{}} />;
-            case 'notifications': return <NotificationsList />;
-            case 'settings': return <SettingsPanel profile={profile} onLogout={() => supabase.auth.signOut()} theme={theme} setTheme={setTheme} isPinEnabled={isPinEnabled} onTogglePin={setPinEnabled} onSetupPin={() => setActiveModal('setupPin')} onDeleteData={()=>{}} />;
-            default: return <Dashboard transactions={transactions} accounts={accounts} tasks={tasks} budgets={budgets} accountBalances={accountBalances} onDeleteTransaction={()=>{}} onSelectTransaction={setSelectedTransaction} onViewCalendar={() => setView('calendar')} onViewTasks={() => setView('tasks')} onViewBudgets={() => setView('budgets')} onToggleTaskCompletion={()=>{}} />;
+    const handleAddBudget = async (budget: Omit<Budget, 'id' | 'user_id' | 'created_at' | 'period'>) => {
+        if (!user) return;
+        const { data, error } = await supabase.from('budgets').insert({ ...budget, user_id: user.id, period: 'monthly' }).select().single();
+        if (error) alert('Error al crear presupuesto.');
+        else if (data) {
+            setBudgets(prev => [...prev, data as Budget]);
+            closeModal();
         }
     };
     
-    const closeModal = () => {
-        setActiveModal(null);
-        setTransactionToEdit(null);
-        setAccountToEdit(null);
-        setRecurringToEdit(null);
-        setTaskToEdit(null);
-        setBudgetToEdit(null);
-        setTransferPrefill(null);
+    const handleUpdateBudget = async (budget: Partial<Budget> & { id: string }) => {
+        const { data, error } = await supabase.from('budgets').update(budget).eq('id', budget.id).select().single();
+        if (error) alert('Error al actualizar presupuesto.');
+        else if (data) {
+            setBudgets(prev => prev.map(b => b.id === data.id ? data as Budget : b));
+            closeModal();
+        }
+    };
+    
+    const handleDeleteBudget = async (id: string) => {
+        if (!window.confirm('¿Eliminar este presupuesto?')) return;
+        const { error } = await supabase.from('budgets').delete().eq('id', id);
+        if (error) alert('Error al eliminar presupuesto.');
+        else setBudgets(prev => prev.filter(b => b.id !== id));
     };
 
-    return (
-        <div className="bg-neutral-100 dark:bg-neutral-900 text-neutral-900 dark:text-white min-h-screen font-sans pb-20">
-            <Header onOpenSettings={() => setView('settings')} onOpenSearch={() => setSearchOpen(true)} setView={setView} />
-            <main className="container mx-auto px-4 md:px-8 py-6">
-                {renderView()}
-            </main>
-            <BottomNavBar activeView={view} setView={setView} openAddMenu={() => setActiveModal('addMenu')} openFijosMenu={() => setActiveModal('fijosMenu')} />
+    const handleUpdateSettings = async (newSettings: Partial<AppSettings>) => {
+        if (!user) return;
+        const updatedSettings = { ...settings, ...newSettings };
+        const { data, error } = await supabase.from('settings').update({ settings_data: updatedSettings }).eq('user_id', user.id).select().single();
+        if (error) {
+            alert('Error al guardar los ajustes.');
+        } else if (data) {
+            setSettings(data.settings_data as AppSettings);
+        }
+    };
+    
+  if (isLoading) {
+    return <div className="fixed inset-0 bg-neutral-900 flex items-center justify-center"><div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-brand-primary"></div></div>;
+  }
 
-            {/* Modals */}
-            {activeModal === 'addMenu' && <AddMenuModal onClose={closeModal} onSelect={type => { setActiveModal(`add${type.charAt(0).toUpperCase() + type.slice(1)}`); }} />}
-            {activeModal === 'fijosMenu' && <FijosMenuModal onClose={closeModal} setView={setView} />}
-            
-            {activeModal === 'addTransaction' && <div className="fixed inset-0 bg-black/50 z-40 p-4 overflow-y-auto"><div className="mx-auto max-w-lg mt-10"><AddTransactionForm onAddTransaction={()=>{}} onUpdateTransaction={()=>{}} transactionToEdit={transactionToEdit} accounts={accounts} /></div></div>}
-            {activeModal === 'addAccount' && <div className="fixed inset-0 bg-black/50 z-40 p-4 overflow-y-auto"><div className="mx-auto max-w-lg mt-10"><AddAccountForm onAddAccount={()=>{}} onUpdateAccount={()=>{}} accountToEdit={accountToEdit} /></div></div>}
-            {activeModal === 'addTransfer' && <div className="fixed inset-0 bg-black/50 z-40 p-4 overflow-y-auto"><div className="mx-auto max-w-lg mt-10"><AddTransferForm onAddTransfer={()=>{}} accounts={accounts} prefillData={transferPrefill} /></div></div>}
-            {activeModal === 'addRecurring' && <div className="fixed inset-0 bg-black/50 z-40 p-4 overflow-y-auto"><div className="mx-auto max-w-lg mt-10"><AddRecurringTransactionForm onAddRecurring={()=>{}} onUpdateRecurring={()=>{}} recurringTransactionToEdit={recurringToEdit} accounts={accounts} /></div></div>}
-            {activeModal === 'addTask' && <div className="fixed inset-0 bg-black/50 z-40 p-4 overflow-y-auto"><div className="mx-auto max-w-lg mt-10"><AddTaskForm onAddTask={()=>{}} onUpdateTask={()=>{}} taskToEdit={taskToEdit} accounts={accounts} /></div></div>}
-            {activeModal === 'addBudget' && <div className="fixed inset-0 bg-black/50 z-40 p-4 overflow-y-auto"><div className="mx-auto max-w-lg mt-10"><AddBudgetForm onAddBudget={()=>{}} onUpdateBudget={()=>{}} budgetToEdit={budgetToEdit} existingBudgets={budgets} /></div></div>}
-            
-            {selectedTransaction && <TransactionDetailModal transaction={selectedTransaction} accounts={accounts} onClose={() => setSelectedTransaction(null)} onDelete={()=>{}} />}
-            {isSearchOpen && <SearchModal isOpen={isSearchOpen} onClose={() => setSearchOpen(false)} transactions={transactions} accounts={accounts} onSelectTransaction={t => { setSelectedTransaction(t); setSearchOpen(false); }} />}
-            {activeModal === 'setupPin' && <PinSetupModal onClose={closeModal} onSetPin={pin => { setPin(pin); setPinEnabled(true); localStorage.setItem('app_pin', pin); closeModal(); }} />}
-        </div>
-    );
+  if (!session) {
+    const handleNavigation = (view: 'signIn' | 'signUp') => setAuthView(view);
+    if (authView === 'getStarted') return <GetStarted onNavigateToAuth={handleNavigation} />;
+    return <Auth initialView={authView === 'signIn' ? 'signIn' : 'signUp'} onBack={authView !== 'getStarted' ? () => setAuthView('getStarted') : undefined} />;
+  }
+  
+  if (settings.pinLock && !isUnlocked) {
+    return <PinLockScreen correctPin={settings.pinLock} onUnlock={() => setUnlocked(true)} />;
+  }
+
+  const renderView = () => {
+    switch (view) {
+        case 'dashboard': return <Dashboard transactions={transactions} accounts={accounts} tasks={tasks} budgets={budgets} accountBalances={accountBalances} onDeleteTransaction={handleDeleteTransaction} onSelectTransaction={setSelectedTransaction} onViewCalendar={() => setView('calendar')} onViewTasks={() => setView('tasks')} onViewBudgets={() => setView('budgets')} onToggleTaskCompletion={handleToggleTaskCompletion} />;
+        case 'calendar': return <CalendarView transactions={transactions} accounts={accounts} onSelectTransaction={setSelectedTransaction} onDeleteTransaction={handleDeleteTransaction} />;
+        case 'accounts': return <AccountsList accounts={accounts} transactions={transactions} accountBalances={accountBalances} onAddAccount={() => setActiveModal('addAccount')} onDeleteAccount={handleDeleteAccount} onEditAccount={(acc) => { setEntityToEdit(acc); setActiveModal('addAccount'); }} onUpdateAccount={handleUpdateAccount} onSelectTransaction={setSelectedTransaction} onAddMoneyToCard={(card) => { setTransferPrefill({ toAccountId: card.id }); setActiveModal('addTransfer'); }} />;
+        case 'tasks': return <TasksList tasks={tasks} onToggleCompletion={handleToggleTaskCompletion} onDeleteTask={handleDeleteTask} onEditTask={(task) => { setEntityToEdit(task); setActiveModal('addTask'); }} onAddTask={() => setActiveModal('addTask')} />;
+        case 'recurring': return <RecurringTransactionList recurringTransactions={recurringTransactions} accounts={accounts} onDelete={handleDeleteRecurring} onEdit={(rt) => { setEntityToEdit(rt); setActiveModal('addRecurring'); }} onAdd={() => setActiveModal('addRecurring')} />;
+        case 'budgets': return <BudgetsList budgets={budgets} transactions={transactions} onAddBudget={() => setActiveModal('addBudget')} onEditBudget={(b) => { setEntityToEdit(b); setActiveModal('addBudget'); }} onDeleteBudget={handleDeleteBudget} />;
+        case 'notifications': return <NotificationsList />;
+        default: return <Dashboard transactions={transactions} accounts={accounts} tasks={tasks} budgets={budgets} accountBalances={accountBalances} onDeleteTransaction={handleDeleteTransaction} onSelectTransaction={setSelectedTransaction} onViewCalendar={() => setView('calendar')} onViewTasks={() => setView('tasks')} onViewBudgets={() => setView('budgets')} onToggleTaskCompletion={handleToggleTaskCompletion} />;
+    }
+  };
+
+  const renderModal = () => {
+    if (!activeModal) return null;
+
+    const formProps = {
+        accounts,
+        defaultCurrency: settings.defaultCurrency
+    };
+
+    switch (activeModal) {
+      case 'addTransaction': return <AddTransactionForm onAddTransaction={handleAddTransaction} onUpdateTransaction={handleUpdateTransaction} transactionToEdit={entityToEdit} {...formProps} />;
+      case 'addTransfer': return <AddTransferForm onAddTransfer={handleAddTransfer} accounts={accounts} defaultCurrency={settings.defaultCurrency} prefillData={transferPrefill} />;
+      case 'addRecurring': return <AddRecurringTransactionForm onAddRecurring={handleAddRecurring} onUpdateRecurring={handleUpdateRecurring} recurringTransactionToEdit={entityToEdit} {...formProps} />;
+      case 'addTask': return <AddTaskForm onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} taskToEdit={entityToEdit} {...formProps} />;
+      case 'addAccount': return <AddAccountForm onAddAccount={handleAddAccount} onUpdateAccount={handleUpdateAccount} accountToEdit={entityToEdit} />;
+      case 'addBudget': return <AddBudgetForm onAddBudget={handleAddBudget} onUpdateBudget={handleUpdateBudget} budgetToEdit={entityToEdit} existingBudgets={budgets} />;
+      default: return null;
+    }
+  };
+  
+  return (
+    <div className="bg-neutral-100 dark:bg-neutral-900 min-h-screen text-neutral-900 dark:text-white pb-20">
+      <Header onOpenSettings={() => setSettingsOpen(true)} onOpenSearch={() => setSearchOpen(true)} setView={setView} />
+      
+      <main className="container mx-auto p-4 md:p-8">
+        {isLoading ? (
+          <div className="text-center py-20">Cargando tus datos...</div>
+        ) : (
+          renderView()
+        )}
+      </main>
+
+      <BottomNavBar 
+        activeView={view} 
+        setView={setView} 
+        openAddMenu={() => setActiveModal('addMenu')}
+        openFijosMenu={() => setActiveModal('fijosMenu')}
+      />
+
+      {/* Modals and Panels */}
+      {activeModal === 'addMenu' && <AddMenuModal onClose={closeModal} onSelect={(type) => setActiveModal(`add${type.charAt(0).toUpperCase() + type.slice(1)}`)} />}
+      {activeModal === 'fijosMenu' && <FijosMenuModal onClose={closeModal} setView={setView} />}
+      {activeModal && activeModal.startsWith('add') && activeModal !== 'addMenu' && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-center justify-center p-4" onClick={closeModal}>
+              <div onClick={e => e.stopPropagation()} className="w-full max-w-md">
+                 {renderModal()}
+              </div>
+          </div>
+      )}
+      
+      {selectedTransaction && <TransactionDetailModal transaction={selectedTransaction} accounts={accounts} onClose={() => setSelectedTransaction(null)} onDelete={handleDeleteTransaction} />}
+      
+      <SettingsPanel isOpen={isSettingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onUpdateSettings={handleUpdateSettings} userProfile={userProfile} />
+
+      <SearchModal isOpen={isSearchOpen} onClose={() => setSearchOpen(false)} transactions={transactions} accounts={accounts} onSelectTransaction={(t) => { setSearchOpen(false); setSelectedTransaction(t); }} />
+
+      {taskToComplete && <CompleteTaskModal task={taskToComplete} onClose={() => setTaskToComplete(null)} onCompleteOnly={() => {handleToggleTaskCompletion({...taskToComplete, transactionId: undefined}); setTaskToComplete(null);}} onCompleteWithTransaction={() => {console.log("Not implemented"); setTaskToComplete(null);}}/>}
+    </div>
+  );
 };
-
-// Define COLOR_THEMES inside App.tsx or import it if it's in constants.
-const COLOR_THEMES: { name: ThemeName; label: string; primary: string; secondary: string }[] = [
-    { name: 'default', label: 'Predeterminado', primary: '79 70 229', secondary: '236 72 153' },
-    { name: 'forest', label: 'Bosque', primary: '22 163 74', secondary: '249 115 22' },
-    { name: 'sunset', label: 'Atardecer', primary: '147 51 234', secondary: '245 158 11' },
-    { name: 'ocean', label: 'Océano', primary: '59 130 246', secondary: '20 184 166' },
-];
 
 export default App;

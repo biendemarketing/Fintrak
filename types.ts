@@ -1,27 +1,15 @@
-
-import type { User } from '@supabase/supabase-js';
-
-export type Currency = 'DOP' | 'USD';
 export type TransactionType = 'income' | 'expense' | 'transfer';
-export type View = 'dashboard' | 'calendar' | 'accounts' | 'tasks' | 'recurring' | 'notifications' | 'budgets' | 'settings' | 'auth' | 'get-started';
+export type Currency = 'DOP' | 'USD';
+export type RecurringFrequency = 'Semanal' | 'Mensual' | 'Anual';
+export type CardBrand = 'Visa' | 'Mastercard' | 'American Express' | 'Otro';
+export type AccountType = 'Cuenta de Nómina' | 'Cuenta de Ahorro' | 'Cuenta Corriente' | 'Cuenta Empresarial' | 'Tarjeta de Crédito';
+export type ThemeName = 'default' | 'forest' | 'sunset' | 'ocean';
+export type View = 'dashboard' | 'calendar' | 'accounts' | 'tasks' | 'recurring' | 'notifications' | 'budgets';
 
 export interface Category {
     name: string;
     type: 'income' | 'expense';
 }
-
-export type AccountType = 
-    'Cuenta de Nómina' |
-    'Cuenta de Ahorro' |
-    'Cuenta Corriente' |
-    'Cuenta Empresarial' |
-    'Tarjeta de Crédito';
-
-export type RecurringFrequency = 'Semanal' | 'Mensual' | 'Anual';
-
-export type CardBrand = 'Visa' | 'Mastercard' | 'American Express' | 'Otro';
-
-export type ThemeName = 'default' | 'forest' | 'sunset' | 'ocean';
 
 export interface Transaction {
     id: string;
@@ -31,10 +19,10 @@ export interface Transaction {
     type: TransactionType;
     category: string;
     date: string; // YYYY-MM-DD
-    time?: string; // HH:mm
+    time?: string; // HH:MM
     currency: Currency;
     accountId: string;
-    transferToAccountId?: string;
+    transferToAccountId?: string | null;
     receiptImage?: string;
 }
 
@@ -59,10 +47,10 @@ export interface RecurringTransaction {
     type: 'income' | 'expense';
     category: string;
     currency: Currency;
-    accountId: string;
     frequency: RecurringFrequency;
     startDate: string; // YYYY-MM-DD
     nextDueDate: string; // YYYY-MM-DD
+    accountId: string;
 }
 
 export interface Task {
@@ -70,11 +58,11 @@ export interface Task {
     user_id: string;
     title: string;
     dueDate: string; // YYYY-MM-DD
-    time?: string; // HH:mm
+    time?: string; // HH:MM
     isCompleted: boolean;
-    transactionId?: string;
-    createdAt: string;
-    completedAt?: string;
+    createdAt: string; // ISO 8601
+    completedAt?: string | null; // ISO 8601
+    transactionId?: string | null;
 }
 
 export interface Budget {
@@ -82,17 +70,25 @@ export interface Budget {
     user_id: string;
     category: string;
     amount: number;
-    period: 'monthly'; // For now, only monthly
-    created_at: string;
+    period: 'monthly';
+    created_at: string; // ISO 8601
 }
 
-export interface Profile {
-    id: string; // This is the user_id
+export interface UserProfile {
+    id: string;
     first_name: string;
     last_name: string;
     avatar_url?: string;
-    date_of_birth?: string;
-    updated_at: string;
+    date_of_birth?: string; // YYYY-MM-DD
 }
 
-export type AppUser = User;
+export interface AppSettings {
+    theme: ThemeName;
+    defaultCurrency: Currency;
+    pinLock: string | null;
+    notifications: {
+        paymentReminders: boolean;
+        budgetAlerts: boolean;
+        newFeatures: boolean;
+    };
+}
