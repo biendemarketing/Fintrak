@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 // FIX: Add file extension to fix module resolution error.
 import { supabase } from '../lib/supabase.ts';
@@ -8,8 +7,6 @@ import Button from './ui/Button.tsx';
 import Input from './ui/Input.tsx';
 // FIX: Add file extension to fix module resolution error.
 import GoogleIcon from './icons/GoogleIcon.tsx';
-// FIX: Add file extension to fix module resolution error.
-import AppleIcon from './icons/AppleIcon.tsx';
 // FIX: Add file extension to fix module resolution error.
 import PasswordStrengthMeter from './PasswordStrengthMeter.tsx';
 // FIX: Add file extension to fix module resolution error.
@@ -75,7 +72,7 @@ const Auth: React.FC<AuthProps> = ({ view, setView }) => {
     setLoading(false);
   };
   
-  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
+  const handleOAuthSignIn = async (provider: 'google') => {
       await supabase.auth.signInWithOAuth({
           provider,
           options: {
@@ -144,12 +141,13 @@ const Auth: React.FC<AuthProps> = ({ view, setView }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-                 <button onClick={() => handleOAuthSignIn('google')} className="w-full inline-flex justify-center py-2 px-4 border border-neutral-300 dark:border-neutral-600 rounded-md shadow-sm bg-white dark:bg-neutral-700 text-sm font-medium text-neutral-500 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-600">
+            <div className="space-y-3">
+                 <button 
+                    onClick={() => handleOAuthSignIn('google')} 
+                    className="w-full inline-flex items-center justify-center py-3 px-4 border border-neutral-300 dark:border-neutral-600 rounded-md shadow-sm bg-white dark:bg-neutral-700 text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-600 space-x-2"
+                >
                     <GoogleIcon className="w-5 h-5"/>
-                </button>
-                 <button onClick={() => handleOAuthSignIn('apple')} className="w-full inline-flex justify-center py-2 px-4 border border-neutral-300 dark:border-neutral-600 rounded-md shadow-sm bg-white dark:bg-neutral-700 text-sm font-medium text-neutral-500 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-600">
-                    <AppleIcon className="w-5 h-5"/>
+                    <span>Continuar con Google</span>
                 </button>
             </div>
             
