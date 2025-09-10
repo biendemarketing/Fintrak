@@ -1,10 +1,12 @@
-export type TransactionType = 'income' | 'expense' | 'transfer';
+// FIX: This file was missing. Added all necessary type definitions.
+export type View = 'dashboard' | 'calendar' | 'accounts' | 'recurring' | 'notifications' | 'tasks' | 'budgets';
+
 export type Currency = 'DOP' | 'USD';
+export type TransactionType = 'income' | 'expense' | 'transfer';
 export type RecurringFrequency = 'Semanal' | 'Mensual' | 'Anual';
-export type CardBrand = 'Visa' | 'Mastercard' | 'American Express' | 'Otro';
 export type AccountType = 'Cuenta de Nómina' | 'Cuenta de Ahorro' | 'Cuenta Corriente' | 'Cuenta Empresarial' | 'Tarjeta de Crédito';
+export type CardBrand = 'Visa' | 'Mastercard' | 'American Express' | 'Otro';
 export type ThemeName = 'default' | 'forest' | 'sunset' | 'ocean';
-export type View = 'dashboard' | 'calendar' | 'accounts' | 'tasks' | 'recurring' | 'notifications' | 'budgets';
 
 export interface Category {
     name: string;
@@ -21,9 +23,9 @@ export interface Transaction {
     date: string; // YYYY-MM-DD
     time?: string; // HH:MM
     currency: Currency;
+    receiptImage?: string | null;
     accountId: string;
     transferToAccountId?: string | null;
-    receiptImage?: string;
 }
 
 export interface Account {
@@ -33,9 +35,9 @@ export interface Account {
     bank: string;
     type: AccountType;
     currency: Currency;
-    accountNumber?: string;
-    cardNumber?: string;
-    cardBrand?: CardBrand;
+    accountNumber?: string | null;
+    cardNumber?: string | null;
+    cardBrand?: CardBrand | null;
     isFrozen?: boolean;
 }
 
@@ -47,10 +49,10 @@ export interface RecurringTransaction {
     type: 'income' | 'expense';
     category: string;
     currency: Currency;
+    accountId: string;
     frequency: RecurringFrequency;
     startDate: string; // YYYY-MM-DD
     nextDueDate: string; // YYYY-MM-DD
-    accountId: string;
 }
 
 export interface Task {
@@ -58,11 +60,11 @@ export interface Task {
     user_id: string;
     title: string;
     dueDate: string; // YYYY-MM-DD
-    time?: string; // HH:MM
+    time?: string | null; // HH:MM
     isCompleted: boolean;
+    transactionId?: string | null;
     createdAt: string; // ISO 8601
     completedAt?: string | null; // ISO 8601
-    transactionId?: string | null;
 }
 
 export interface Budget {
@@ -70,8 +72,8 @@ export interface Budget {
     user_id: string;
     category: string;
     amount: number;
-    period: 'monthly';
-    created_at: string; // ISO 8601
+    period: 'monthly'; // For now, only monthly
+    created_at: string;
 }
 
 export interface UserProfile {
@@ -79,16 +81,12 @@ export interface UserProfile {
     first_name: string;
     last_name: string;
     avatar_url?: string;
-    date_of_birth?: string; // YYYY-MM-DD
+    date_of_birth?: string;
 }
 
 export interface AppSettings {
     theme: ThemeName;
     defaultCurrency: Currency;
-    pinLock: string | null;
-    notifications: {
-        paymentReminders: boolean;
-        budgetAlerts: boolean;
-        newFeatures: boolean;
-    };
+    pin: string | null;
+    pinEnabled: boolean;
 }
